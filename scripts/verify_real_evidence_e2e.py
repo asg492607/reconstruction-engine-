@@ -103,7 +103,7 @@ def run_real_evidence_e2e():
         proc_res = client.post(f"/cases/{case_id}/evidence/{ev_id}/process", headers=headers)
         assert proc_res.status_code == 200, f"Processing failed for {fn}: {proc_res.text}"
         observations = proc_res.json()
-        print(f"      Extracted {len(observations)} verified observations")
+        print(f"      Extracted {len(observations)} AI-generated observations (0 human-verified pending review)")
         uploaded_evidence.append((ev_id, fn, len(observations)))
 
     # 6. Verify observations catalog
@@ -111,10 +111,11 @@ def run_real_evidence_e2e():
     obs_res = client.get(f"/cases/{case_id}/observations", headers=headers)
     assert obs_res.status_code == 200
     all_obs = obs_res.json()
-    print(f"  --> Total case observations: {len(all_obs)}")
+    verified_count = sum(1 for o in all_obs if o.get("verification_status") == "ACCEPTED")
+    print(f"  --> Total case observations: {len(all_obs)} AI-generated ({verified_count} human-verified)")
     assert len(all_obs) >= 8, f"Expected at least 8 observations, got {len(all_obs)}"
     for o in all_obs[:4]:
-        print(f"      • [{o['department']}] {o['observation_type']} at {o['location_label']} ({o['observed_time_raw']})")
+        print(f"      • [{o['department']}] {o['observation_type']} at {o['location_label']} (Status: {o.get('verification_status')})")
 
     # 7. Candidate Entity Resolution & Auto-linking
     print("\n[STEP 7] Performing cross-department entity resolution & linking...")
@@ -148,7 +149,7 @@ def run_real_evidence_e2e():
         print(f"      • [{g['gc_type']}] ({g['significance']}): {g['description']}")
 
     # 10. Evidence-Constrained Reality Reconstruction (Hypotheses)
-    print("\n[STEP 10] Generating evidence-grounded theft hypotheses...")
+    print("\n[STEP 10] Generating evidence-grounded theft hypotheses with Granular Per-Step Support...")
     hyp_res = client.post(f"/cases/{case_id}/hypotheses/generate", headers=headers)
     assert hyp_res.status_code == 201, f"Hypothesis generation failed: {hyp_res.text}"
     hypotheses = hyp_res.json()
@@ -156,12 +157,17 @@ def run_real_evidence_e2e():
     assert len(hypotheses) >= 1, "Expected at least one hypothesis"
 
     for h in hypotheses:
-        print(f"\n      === {h['label']} (Strength: {h['overall_strength']}) ===")
+        print(f"\n      === {h['label']} (Overall Strength: {h['overall_strength']}) ===")
         print(f"      Description: {h['description']}")
-        print(f"      Sequence Steps: {len(h['sequence'])}")
+        print(f"      Per-Step Evidence Support Matrix:")
         for step in h['sequence']:
-            print(f"        Step {step['step']} [{step['phase']} @ {step['time']}]: {step['description']}")
-            print(f"          Sources: {step.get('evidence_sources')}")
+            s_lvl = step.get('support_level', 'UNSTATED')
+            is_dir = "Direct Observation" if step.get('is_directly_observed') else "Inferred Step"
+            print(f"        Step {step['step']} [{step['phase']} @ {step['time']}]:")
+            print(f"          • Description: {step['description']}")
+            print(f"          • Support Level: {s_lvl} ({is_dir})")
+            print(f"          • Rationale: {step.get('support_rationale')}")
+            print(f"          • Sources: {step.get('evidence_sources')}")
 
         # Check Self-Challenge Results
         print(f"      Deterministic Issues Flagged (Layer 1): {len(h.get('deterministic_issues', []))}")
@@ -194,6 +200,19 @@ def run_real_evidence_e2e():
     )
     assert rev_res.status_code == 200, f"Review failed: {rev_res.text}"
     print(f"  --> Hypothesis Status: {rev_res.json()['status']} by Lead Investigator")
+
+    # 11b. End-to-End Provenance Traceability Check
+    print("\n[STEP 11b] Tracing End-to-End Provenance Chain (Hypothesis -> Observation -> Evidence -> SHA256 -> Model)...")
+    prov_res = client.get(f"/cases/{case_id}/hypotheses/{hyp_a['id']}/provenance-chain", headers=headers)
+    assert prov_res.status_code == 200, f"Provenance chain query failed: {prov_res.text}"
+    p_chain = prov_res.json()
+    print(f"  --> Provenance Chain Retrieved for: {p_chain['label']}")
+    for step_p in p_chain.get("provenance_chain", [])[:2]:
+        print(f"      Step {step_p['step']} ({step_p['phase']}) - Support: {step_p['support_level']}")
+        for obs_p in step_p.get("observations", [])[:1]:
+            ev_p = obs_p.get("evidence") or {}
+            print(f"        |-- Obs: [{obs_p['department']}] {obs_p['type']} (Model: {obs_p['model_name']} v{obs_p['model_version']})")
+            print(f"            |-- Source Evidence: {ev_p.get('filename')} | SHA256: {str(ev_p.get('sha256_hash'))[:16]}... | Verified: {obs_p['verification_status']}")
 
     # 12. Investigation Copilot Query with Strict Safeguards
     print("\n[STEP 12] Testing AI Copilot with Safeguards & Citations...")
@@ -236,9 +255,9 @@ def run_real_evidence_e2e():
     print(f"      Deterministic Issues: {len(rd.get('accepted_hypothesis', {}).get('deterministic_issues', []))}")
     print(f"      Adversarial Challenges: {len(rd.get('accepted_hypothesis', {}).get('ai_challenge_notes', []))}")
 
-    print("\n========================================================")
-    print("  ALL 13 VERIFICATION STEPS PASSED WITH REAL MEDIA!")
-    print("========================================================\n")
+    print("\n===========================================================================")
+    print("  ALL 13 AUTOMATED END-TO-END CHECKS PASSED ON GENERATED THEFT DATASET!   ")
+    print("===========================================================================\n")
 
 if __name__ == "__main__":
     try:

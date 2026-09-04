@@ -21,7 +21,7 @@ def guess_evidence_type_from_filename(filename: str) -> EvidenceType:
         return EvidenceType.WITNESS_STATEMENT
     if "inventory" in fn or "stock" in fn:
         return EvidenceType.INVENTORY_RECORD
-    if "transaction" in fn or "payment" in fn or "receipt" in fn:
+    if "transaction" in fn or "payment" in fn or "receipt" in fn or "pos" in fn:
         return EvidenceType.TRANSACTION_RECORD
     if "vehicle" in fn or "car" in fn:
         return EvidenceType.VEHICLE_RECORD

@@ -102,3 +102,23 @@ async def submit_hypothesis_review(
         ip_address=request.client.host if request.client else None
     )
     return reviewed
+
+@router.get("/cases/{case_id}/hypotheses/{hypothesis_id}/provenance-chain")
+async def get_hypothesis_chain(
+    case_id: str,
+    hypothesis_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    case = await get_case_by_id(db, case_id)
+    if not case:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
+    if not check_access(current_user, Action.VIEW_HYPOTHESIS, case=case):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    try:
+        from app.reconstruction.engine import get_hypothesis_provenance_chain
+        chain = await get_hypothesis_provenance_chain(db, case_id, hypothesis_id)
+        return chain
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))

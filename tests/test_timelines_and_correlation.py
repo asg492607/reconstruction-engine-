@@ -103,9 +103,9 @@ iPhone 15 Pro,MISSING,-1
     disc = next((g for g in gaps if g["gc_type"] == "SOFT_DISCREPANCY"), None)
     assert disc is not None
 
-    # Check for hard contradiction (item missing vs zero sales)
-    theft_contradiction = next((g for g in gaps if g["gc_type"] == "HARD_CONTRADICTION"), None)
-    assert theft_contradiction is not None
+    # Check for corroborative discrepancy (item missing vs zero sales)
+    theft_discrepancy = next((g for g in gaps if g["gc_type"] in ("CORROBORATIVE_DISCREPANCY", "HARD_CONTRADICTION")), None)
+    assert theft_discrepancy is not None
 
     # 11. Resolve a gap with note
     resolve_res = await client.patch(

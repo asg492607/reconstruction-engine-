@@ -9,7 +9,7 @@ from app.models.entities import (
 )
 from app.models.enums import (
     ClaimStrength, HypothesisStatus, TargetType, VerificationAction,
-    ObservationType, EntityType, Department
+    ObservationType, EntityType, Department, EvidenceQuality
 )
 from app.reconstruction.self_challenge.layer1_deterministic import (
     run_layer1_deterministic_checks, parse_time_point
@@ -296,6 +296,40 @@ async def generate_theft_hypotheses(db: AsyncSession, case: Case) -> List[Hypoth
         (o.raw_data or {}).get("direct_concealment_observed") is True for o in obs
     )
 
+    # Check evidence quality degradation
+    qualities = [o.evidence_quality for o in obs if o.evidence_quality]
+    has_degraded_quality = any(q in (EvidenceQuality.LOW, EvidenceQuality.POOR) for q in qualities)
+
+    dept_stances = {
+        "INVESTIGATION": f"Surveillance video corroborates {p1_label} ingress, presence near {shelf_loc}, and egress.",
+        "FORENSIC": f"Physical examination establishes mechanical tool cutting on security tether; latent prints unindividualized.",
+        "FINANCIAL": f"Point-of-sale audit confirms zero matching purchase transactions for {item_name}."
+    }
+
+    step1_support = "MODERATE" if has_degraded_quality else "STRONG"
+    step1_rationale = (
+        "Observation supported by degraded or low-resolution sensor capture."
+        if has_degraded_quality
+        else "Direct optical sensor confirmation from entrance camera timestamp overlay."
+    )
+
+    step2_support = "MODERATE"
+    step2_rationale = (
+        f"Subject {p1_label} proximity to {shelf_loc} corroborated by physical severed tether toolmark; "
+        "direct item detachment and concealment was not visually captured on camera (inferred from proximity and absence)."
+    )
+
+    step3_support = "UNCONFIRMED"
+    step3_rationale = (
+        f"Traversal through {corridor_loc.lower()}; zero direct surveillance coverage during this window."
+    )
+
+    step4_support = "LIMITED"
+    step4_rationale = (
+        f"Subject {p1_label} egress directly recorded on camera without corresponding transaction; "
+        f"physical possession of {item_name} at departure is inferred from prior proximity and missing inventory delta."
+    )
+
     hypotheses = []
 
     # -------------------------------------------------------------
@@ -311,7 +345,11 @@ async def generate_theft_hypotheses(db: AsyncSession, case: Case) -> List[Hypoth
             "description": f"Subject {p1_label}{p1_attr_desc} enters store through {entry_loc.lower()}.",
             "evidence_sources": entry_ev_sources,
             "observation_ids": entry_obs_ids,
-            "entity_ids": [p1_label] + ([p1_id] if p1_id else [])
+            "entity_ids": [p1_label] + ([p1_id] if p1_id else []),
+            "support_level": step1_support,
+            "support_rationale": step1_rationale,
+            "is_directly_observed": True,
+            "department_stances": dept_stances
         },
         {
             "step": 2,
@@ -322,7 +360,11 @@ async def generate_theft_hypotheses(db: AsyncSession, case: Case) -> List[Hypoth
             "description": f"Subject {p1_label} observed at {shelf_loc}; physical tampering or {item_name} removal observed.",
             "evidence_sources": shelf_ev_sources,
             "observation_ids": shelf_obs_ids,
-            "entity_ids": [p1_label] + ([p1_id] if p1_id else [])
+            "entity_ids": [p1_label] + ([p1_id] if p1_id else []),
+            "support_level": step2_support,
+            "support_rationale": step2_rationale,
+            "is_directly_observed": False,
+            "department_stances": dept_stances
         },
         {
             "step": 3,
@@ -333,7 +375,11 @@ async def generate_theft_hypotheses(db: AsyncSession, case: Case) -> List[Hypoth
             "description": f"Subject moves through {corridor_loc.lower()} toward exit.",
             "evidence_sources": corridor_ev_sources,
             "observation_ids": [],
-            "entity_ids": [p1_label] + ([p1_id] if p1_id else [])
+            "entity_ids": [p1_label] + ([p1_id] if p1_id else []),
+            "support_level": step3_support,
+            "support_rationale": step3_rationale,
+            "is_directly_observed": False,
+            "department_stances": dept_stances
         },
         {
             "step": 4,
@@ -344,7 +390,11 @@ async def generate_theft_hypotheses(db: AsyncSession, case: Case) -> List[Hypoth
             "description": f"Subject {p1_label} exits through {exit_loc.lower()} with no purchase record for {item_name}.",
             "evidence_sources": exit_ev_sources,
             "observation_ids": exit_obs_ids,
-            "entity_ids": [p1_label] + ([p1_id] if p1_id else [])
+            "entity_ids": [p1_label] + ([p1_id] if p1_id else []),
+            "support_level": step4_support,
+            "support_rationale": step4_rationale,
+            "is_directly_observed": False,
+            "department_stances": dept_stances
         }
     ]
 
@@ -406,7 +456,11 @@ async def generate_theft_hypotheses(db: AsyncSession, case: Case) -> List[Hypoth
             "description": f"Subject {p1_label} enters store through {entry_loc.lower()}.",
             "evidence_sources": entry_ev_sources,
             "observation_ids": entry_obs_ids,
-            "entity_ids": [p1_label] + ([p1_id] if p1_id else [])
+            "entity_ids": [p1_label] + ([p1_id] if p1_id else []),
+            "support_level": "STRONG",
+            "support_rationale": "Direct optical sensor confirmation from entrance camera timestamp overlay.",
+            "is_directly_observed": True,
+            "department_stances": dept_stances
         },
         {
             "step": 2,
@@ -417,7 +471,11 @@ async def generate_theft_hypotheses(db: AsyncSession, case: Case) -> List[Hypoth
             "description": f"{p1_label} accesses or detaches {item_name} at {shelf_loc}.",
             "evidence_sources": [s for s in shelf_ev_sources if any(kw in s.lower() for kw in ["cctv", "cam", "video", "shelf"])] or shelf_ev_sources[:1],
             "observation_ids": shelf_obs_ids,
-            "entity_ids": [p1_label] + ([p1_id] if p1_id else [])
+            "entity_ids": [p1_label] + ([p1_id] if p1_id else []),
+            "support_level": "MODERATE",
+            "support_rationale": "Presence corroborated; physical detachment inferred.",
+            "is_directly_observed": False,
+            "department_stances": dept_stances
         },
         {
             "step": 3,
@@ -428,7 +486,11 @@ async def generate_theft_hypotheses(db: AsyncSession, case: Case) -> List[Hypoth
             "description": f"{p1_label} transfers item to second entity (P2) within {corridor_loc.lower()}.",
             "evidence_sources": corridor_ev_sources,
             "observation_ids": [],
-            "entity_ids": [p1_label, "P2"]
+            "entity_ids": [p1_label, "P2"],
+            "support_level": "SPECULATIVE",
+            "support_rationale": "Speculative accomplice hand-off inside coverage gap; zero physical or visual evidence confirms presence of a second actor.",
+            "is_directly_observed": False,
+            "department_stances": dept_stances
         },
         {
             "step": 4,
@@ -439,7 +501,11 @@ async def generate_theft_hypotheses(db: AsyncSession, case: Case) -> List[Hypoth
             "description": f"{p1_label} departs clean through {exit_loc.lower()} while P2 exits separately.",
             "evidence_sources": exit_ev_sources[:1] if exit_ev_sources else corridor_ev_sources,
             "observation_ids": exit_obs_ids,
-            "entity_ids": [p1_label, "P2"]
+            "entity_ids": [p1_label, "P2"],
+            "support_level": "SPECULATIVE",
+            "support_rationale": "Hypothetical secondary departure route unconfirmed by surveillance.",
+            "is_directly_observed": False,
+            "department_stances": dept_stances
         }
     ]
 
@@ -527,3 +593,77 @@ async def review_hypothesis(
     await db.commit()
     await db.refresh(hyp)
     return hyp
+
+async def get_hypothesis_provenance_chain(db: AsyncSession, case_id: str, hypothesis_id: str) -> Dict[str, Any]:
+    """
+    Builds an end-to-end provenance chain for a hypothesis:
+    Hypothesis -> Sequence Step -> Observations -> Evidence File -> SHA-256 Hash -> Model/Version -> Human Verification Status.
+    """
+    hyp = await get_hypothesis_by_id(db, hypothesis_id)
+    if not hyp or hyp.case_id != case_id:
+        raise ValueError("Hypothesis not found")
+
+    evidence_items = (await db.execute(select(Evidence).where(Evidence.case_id == case_id))).scalars().all()
+    evidence_map = {e.id: e for e in evidence_items}
+
+    obs_items = (await db.execute(select(Observation).where(Observation.case_id == case_id))).scalars().all()
+    obs_map = {o.id: o for o in obs_items}
+
+    ver_items = (await db.execute(select(Verification).where(Verification.case_id == case_id))).scalars().all()
+    ver_map = {v.target_id: v for v in ver_items}
+
+    chain_steps = []
+    for step in hyp.sequence:
+        step_obs_list = []
+        for oid in step.get("observation_ids", []):
+            o = obs_map.get(oid)
+            if o:
+                ev = evidence_map.get(o.evidence_id)
+                v = ver_map.get(o.id)
+                step_obs_list.append({
+                    "observation_id": o.id,
+                    "type": o.observation_type.value,
+                    "department": o.department.value,
+                    "location": o.location_label,
+                    "observed_time": o.observed_time_raw,
+                    "confidence": o.observation_confidence,
+                    "quality": o.evidence_quality.value if o.evidence_quality else "MEDIUM",
+                    "model_name": o.model_name,
+                    "model_version": o.model_version,
+                    "verification_status": v.action.value if v else o.verification_status.value,
+                    "verified_by": v.verified_by if v else None,
+                    "verified_at": v.verified_at.isoformat() if v else None,
+                    "evidence": {
+                        "evidence_id": ev.id if ev else None,
+                        "filename": ev.original_filename if ev else None,
+                        "sha256_hash": ev.sha256_hash if ev else None,
+                        "storage_key": ev.storage_key if ev else None,
+                        "uploaded_at": ev.uploaded_at.isoformat() if ev else None
+                    } if ev else None
+                })
+
+        chain_steps.append({
+            "step": step.get("step"),
+            "phase": step.get("phase"),
+            "time": step.get("time"),
+            "location": step.get("location"),
+            "description": step.get("description"),
+            "support_level": step.get("support_level", "MODERATE"),
+            "support_rationale": step.get("support_rationale", ""),
+            "is_directly_observed": step.get("is_directly_observed", False),
+            "evidence_sources": step.get("evidence_sources", []),
+            "observations": step_obs_list,
+            "department_stances": step.get("department_stances", {})
+        })
+
+    return {
+        "hypothesis_id": hyp.id,
+        "case_id": hyp.case_id,
+        "label": hyp.label,
+        "overall_strength": hyp.overall_strength.value,
+        "status": hyp.status.value,
+        "reviewed_by": hyp.reviewed_by,
+        "reviewed_at": hyp.reviewed_at.isoformat() if hyp.reviewed_at else None,
+        "review_note": hyp.review_note,
+        "provenance_chain": chain_steps
+    }

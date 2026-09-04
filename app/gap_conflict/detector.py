@@ -57,21 +57,43 @@ async def detect_case_gaps_and_conflicts(
 
     inventory_missing = any(o.observation_type.value == "OBJECT_DETECTED" for o in observations)
     has_unauthorized_tx = any(
-        o.raw_data.get("anomaly_type") in ("UNAUTHORIZED_REMOVAL_NO_PAYMENT", "NO_MATCHING_TRANSACTION_RECORDED")
+        (o.raw_data or {}).get("anomaly_type") in ("UNAUTHORIZED_REMOVAL_NO_PAYMENT", "NO_MATCHING_TRANSACTION_RECORDED")
         for o in observations
     )
 
     if inventory_missing and has_unauthorized_tx:
-        theft_conflict = GapConflict(
+        corr_discrepancy = GapConflict(
             case_id=case.id,
-            gc_type=GapConflictType.HARD_CONTRADICTION,
-            description="Item listed as present in baseline audit was confirmed missing, but zero corresponding POS sales or payments exist in transaction logs.",
-            significance=Significance.CRITICAL,
-            significance_reason="Direct contradiction between physical asset disappearance and point-of-sale accounting logs indicates unauthorized removal (theft).",
+            gc_type=GapConflictType.CORROBORATIVE_DISCREPANCY,
+            description="Item confirmed missing in inventory audit, with no matching point-of-sale purchase recorded in transaction logs.",
+            significance=Significance.HIGH,
+            significance_reason="Corroborative discrepancy: Physical inventory shrinkage aligns with absence of checkout transactions, indicating unrecorded removal rather than a data contradiction.",
             is_resolved=False
         )
-        db.add(theft_conflict)
-        detected.append(theft_conflict)
+        db.add(corr_discrepancy)
+        detected.append(corr_discrepancy)
+
+    # 5. Check for genuine hard contradictions (e.g. contradictory attire or conflicting status)
+    clothing_descriptors = set()
+    for o in observations:
+        attrs = (o.raw_data or {}).get("attributes") or {}
+        if "clothing" in attrs:
+            clothing_descriptors.add(str(attrs["clothing"]).strip())
+    
+    # Conflict between light and dark attire or mutually exclusive colors
+    has_dark = any("dark" in c.lower() or "black" in c.lower() for c in clothing_descriptors)
+    has_light = any("white" in c.lower() or "light" in c.lower() or "red" in c.lower() for c in clothing_descriptors)
+    if has_dark and has_light:
+        contra = GapConflict(
+            case_id=case.id,
+            gc_type=GapConflictType.HARD_CONTRADICTION,
+            description=f"Direct witness/visual contradiction: Conflicting subject attire descriptors ({', '.join(clothing_descriptors)}).",
+            significance=Significance.CRITICAL,
+            significance_reason="Mutually exclusive physical appearance descriptors cannot both be simultaneously true for a single individual.",
+            is_resolved=False
+        )
+        db.add(contra)
+        detected.append(contra)
 
     await db.commit()
     return detected
