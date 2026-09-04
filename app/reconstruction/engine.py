@@ -170,26 +170,51 @@ async def generate_theft_hypotheses(db: AsyncSession, case: Case) -> List[Hypoth
     p1_label = p1_entity.label if p1_entity else "P1"
     p1_id = p1_entity.id if p1_entity else None
 
-    # 2. Discover Target Missing Item (e.g. iPhone 15 Pro)
-    item_name = "iPhone 15 Pro"
+    # Discover attributes for P1 from observations
+    p1_attr_desc = ""
     for o in obs:
         raw = o.raw_data or {}
-        if "item_name" in raw:
-            item_name = raw["item_name"]
-            break
-        elif "item" in raw:
-            item_name = raw["item"]
-            break
-        elif (o.observation_type == ObservationType.OBJECT_DETECTED or "iphone" in str(raw).lower()):
-            if "iphone" in str(raw).lower():
-                item_name = "iPhone 15 Pro"
+        attrs = raw.get("attributes") or {}
+        if attrs:
+            clothing = attrs.get("clothing")
+            bag = attrs.get("carrying") or attrs.get("bag")
+            parts = []
+            if clothing:
+                parts.append(clothing)
+            if bag:
+                parts.append(f"carrying {bag}")
+            if parts:
+                p1_attr_desc = f" ({', '.join(parts)})"
                 break
+
+    # 2. Discover Target Missing Item dynamically from observations, claims, or case metadata
+    item_name = None
+    for o in obs:
+        raw = o.raw_data or {}
+        if "item_name" in raw and raw["item_name"]:
+            item_name = str(raw["item_name"]).strip()
+            break
+        elif "item" in raw and raw["item"]:
+            item_name = str(raw["item"]).strip()
+            break
+        elif "sku" in raw and raw["sku"]:
+            item_name = f"SKU-{raw['sku']}"
+            break
+
+    if not item_name and case.title:
+        import re
+        m = re.search(r"(?:stolen|missing|theft of|item|product)\s*:?\s*([A-Za-z0-9\s\-]+?)(?:\.|\,|$|\n)", case.title, re.IGNORECASE)
+        if m:
+            item_name = m.group(1).strip()
+
+    if not item_name:
+        item_name = "Targeted Property"
 
     # 3. Discover Ingress / Entry Observation
     entry_obs = next(
         (o for o in obs if o.observation_type == ObservationType.ENTRY_EVENT or 
-         "entrance" in (o.location_label or "").lower() or 
-         (evidence_map.get(o.evidence_id) and "entrance" in evidence_map[o.evidence_id].original_filename.lower())),
+         "entrance" in (o.location_label or "").lower() or "entry" in (o.location_label or "").lower() or
+         (evidence_map.get(o.evidence_id) and any(kw in evidence_map[o.evidence_id].original_filename.lower() for kw in ["entrance", "entry"]))),
         None
     )
     entry_dt = entry_obs.observed_time_parsed if entry_obs and entry_obs.observed_time_parsed else (
@@ -204,24 +229,22 @@ async def generate_theft_hypotheses(db: AsyncSession, case: Case) -> List[Hypoth
         if ev:
             entry_ev_sources.append(ev.original_filename)
         entry_obs_ids.append(entry_obs.id)
-    else:
-        entry_ev_sources.append("cctv_entrance.mp4")
+    elif evidence_items:
+        entry_ev_sources.append(evidence_items[0].original_filename)
 
-    # 4. Discover Proximity & Tampering Observations (Aisle / Shelf / Tether damage / Witness)
+    # 4. Discover Proximity & Tampering Observations (Aisle / Shelf / Counter / Tether damage / Witness)
     shelf_obs = [
         o for o in obs if 
-        "aisle" in (o.location_label or "").lower() or 
-        "shelf" in (o.location_label or "").lower() or 
-        "counter" in (o.location_label or "").lower() or
+        any(loc in (o.location_label or "").lower() for loc in ["aisle", "shelf", "counter", "display", "scene"]) or
         o.observation_type in (ObservationType.PHYSICAL_MARK_DETECTED, ObservationType.MOVEMENT_DETECTED) or
-        (evidence_map.get(o.evidence_id) and any(kw in evidence_map[o.evidence_id].original_filename.lower() for kw in ["aisle", "shelf", "witness"]))
+        (evidence_map.get(o.evidence_id) and any(kw in evidence_map[o.evidence_id].original_filename.lower() for kw in ["aisle", "shelf", "witness", "tamper", "display", "counter", "scene"]))
     ]
     cctv_shelf = next((o for o in shelf_obs if o.time_source in ("camera_overlay", "camera_timestamp")), None)
     shelf_dt = (cctv_shelf.observed_time_parsed if cctv_shelf and cctv_shelf.observed_time_parsed else None) or next((o.observed_time_parsed for o in shelf_obs if o.observed_time_parsed), None) or (
         case.incident_time_observed if case.incident_time_observed else entry_dt + timedelta(minutes=4)
     )
     shelf_time_str = f"{shelf_dt.strftime('%I:%M %p').lstrip('0')} - {(shelf_dt + timedelta(minutes=3)).strftime('%I:%M %p').lstrip('0')}"
-    shelf_loc = next((o.location_label for o in shelf_obs if o.location_label), "Electronics Display Shelf (Aisle 3)")
+    shelf_loc = next((o.location_label for o in shelf_obs if o.location_label), "Display Shelf / Counter Area")
     shelf_ev_sources = []
     shelf_obs_ids = []
     for so in shelf_obs:
@@ -229,8 +252,8 @@ async def generate_theft_hypotheses(db: AsyncSession, case: Case) -> List[Hypoth
         ev = evidence_map.get(so.evidence_id)
         if ev and ev.original_filename not in shelf_ev_sources:
             shelf_ev_sources.append(ev.original_filename)
-    if not shelf_ev_sources:
-        shelf_ev_sources = ["cctv_aisle.mp4", "witness_statement.txt", "crime_scene_shelf.jpg"]
+    if not shelf_ev_sources and evidence_items:
+        shelf_ev_sources = [evidence_items[min(1, len(evidence_items) - 1)].original_filename]
 
     # 5. Discover Egress / Exit Observation & Payment Reconciliation
     exit_obs = next(
@@ -251,26 +274,26 @@ async def generate_theft_hypotheses(db: AsyncSession, case: Case) -> List[Hypoth
         if ev:
             exit_ev_sources.append(ev.original_filename)
         exit_obs_ids.append(exit_obs.id)
-    else:
-        exit_ev_sources.append("cctv_exit.mp4")
+    elif evidence_items:
+        exit_ev_sources.append(evidence_items[-1].original_filename)
 
-    # Add transaction record source to exit reconciliation
-    tx_ev = next((e for e in evidence_items if "transaction" in e.original_filename.lower()), None)
+    # Add transaction record source to exit reconciliation if present
+    tx_ev = next((e for e in evidence_items if any(kw in e.original_filename.lower() for kw in ["transaction", "pos", "receipt", "audit"])), None)
     if tx_ev and tx_ev.original_filename not in exit_ev_sources:
         exit_ev_sources.append(tx_ev.original_filename)
 
-    # 6. Discover Blind-Spot Corridor Transition between Shelf and Exit
-    corridor_gap = next((g for g in gaps if g.gc_type.value == "GAP" or "corridor" in g.description.lower() or "blind" in g.description.lower()), None)
+    # 6. Discover Coverage Gap between Shelf and Exit
+    corridor_gap = next((g for g in gaps if g.gc_type.value == "GAP" or any(kw in g.description.lower() for kw in ["corridor", "blind", "unmonitored", "coverage"])), None)
     gap_start = shelf_dt + timedelta(minutes=2)
     gap_end = exit_dt - timedelta(minutes=1) if exit_dt > gap_start else gap_start + timedelta(minutes=1)
     corridor_dt = gap_start
     corridor_time_str = f"{gap_start.strftime('%I:%M %p').lstrip('0')} - {gap_end.strftime('%I:%M %p').lstrip('0')}"
-    corridor_loc = "Unmonitored Hallway Blind Spot"
-    corridor_ev_sources = ["corridor_coverage_gap"]
+    corridor_loc = (corridor_gap.description.split(":")[0] if corridor_gap else "Unmonitored Surveillance Gap Area")
+    corridor_ev_sources = [f"Coverage Gap: {corridor_loc}"]
 
     # Check whether direct item handling was visually observed
     has_direct_handling_captured = any(
-        o.raw_data.get("direct_concealment_observed") is True for o in obs
+        (o.raw_data or {}).get("direct_concealment_observed") is True for o in obs
     )
 
     hypotheses = []
@@ -285,7 +308,7 @@ async def generate_theft_hypotheses(db: AsyncSession, case: Case) -> List[Hypoth
             "time": entry_time_str,
             "time_parsed": entry_dt.isoformat(),
             "location": entry_loc,
-            "description": f"Subject {p1_label} (wearing dark jacket and backpack) enters store through {entry_loc.lower()}.",
+            "description": f"Subject {p1_label}{p1_attr_desc} enters store through {entry_loc.lower()}.",
             "evidence_sources": entry_ev_sources,
             "observation_ids": entry_obs_ids,
             "entity_ids": [p1_label] + ([p1_id] if p1_id else [])
@@ -296,7 +319,7 @@ async def generate_theft_hypotheses(db: AsyncSession, case: Case) -> List[Hypoth
             "time": shelf_time_str,
             "time_parsed": shelf_dt.isoformat(),
             "location": shelf_loc,
-            "description": f"Subject {p1_label} reaches toward display cradle; anti-theft security tether is severed; {item_name} removed.",
+            "description": f"Subject {p1_label} observed at {shelf_loc}; physical tampering or {item_name} removal observed.",
             "evidence_sources": shelf_ev_sources,
             "observation_ids": shelf_obs_ids,
             "entity_ids": [p1_label] + ([p1_id] if p1_id else [])
@@ -307,7 +330,7 @@ async def generate_theft_hypotheses(db: AsyncSession, case: Case) -> List[Hypoth
             "time": corridor_time_str,
             "time_parsed": corridor_dt.isoformat(),
             "location": corridor_loc,
-            "description": f"Subject moves through unmonitored corridor toward front exit.",
+            "description": f"Subject moves through {corridor_loc.lower()} toward exit.",
             "evidence_sources": corridor_ev_sources,
             "observation_ids": [],
             "entity_ids": [p1_label] + ([p1_id] if p1_id else [])
@@ -318,7 +341,7 @@ async def generate_theft_hypotheses(db: AsyncSession, case: Case) -> List[Hypoth
             "time": exit_time_str,
             "time_parsed": exit_dt.isoformat(),
             "location": exit_loc,
-            "description": f"Subject {p1_label} exits through turnstiles carrying bulging backpack without payment recorded.",
+            "description": f"Subject {p1_label} exits through {exit_loc.lower()} with no purchase record for {item_name}.",
             "evidence_sources": exit_ev_sources,
             "observation_ids": exit_obs_ids,
             "entity_ids": [p1_label] + ([p1_id] if p1_id else [])
@@ -331,7 +354,7 @@ async def generate_theft_hypotheses(db: AsyncSession, case: Case) -> List[Hypoth
     )
     layer2_a = await run_layer2_ai_adversarial_review("Hypothesis A", p1_sequence, layer1_a, gap_dicts)
 
-    unknowns_a = ["Visual confirmation of item insertion into bag during corridor blind spot."]
+    unknowns_a = ["Visual confirmation of item concealment during surveillance coverage gap."]
     if not has_direct_handling_captured:
         unknowns_a.append("Direct item transfer or concealment into personal effects was not visually captured on camera (inferred from proximity and subsequent item absence).")
 
@@ -343,7 +366,7 @@ async def generate_theft_hypotheses(db: AsyncSession, case: Case) -> List[Hypoth
         observations=list(obs),
         deterministic_issues=layer1_a,
         gap_dicts=gap_dicts,
-        assumptions=[f"Item {item_name} remained in backpack continuously from Aisle 3 through exit."],
+        assumptions=[f"Item {item_name} remained in possession from {shelf_loc} through {exit_loc}."],
         unknowns=unknowns_a,
         is_speculative_branch=False
     )
@@ -352,14 +375,14 @@ async def generate_theft_hypotheses(db: AsyncSession, case: Case) -> List[Hypoth
         case_id=case.id,
         label=f"Hypothesis A: Sole Actor Concealment ({p1_label})",
         description=(
-            f"Candidate Entity {p1_label} entered the store via {entry_loc}, was present at {shelf_loc} "
-            f"when the security tether was severed, concealed the {item_name} in their backpack, "
-            f"traversed the unmonitored corridor, and exited via {exit_loc} without payment."
+            f"Candidate Entity {p1_label} entered via {entry_loc}, was present at {shelf_loc} "
+            f"during incident window, traversed {corridor_loc}, and exited via {exit_loc} "
+            f"with {item_name} without authorized transaction record."
         ),
         sequence=p1_sequence,
         supporting_claim_ids=claim_ids,
         contradicting_claim_ids=[],
-        assumptions=[f"Item {item_name} remained in backpack continuously from Aisle 3 through exit."],
+        assumptions=[f"Item {item_name} remained in possession from {shelf_loc} through {exit_loc}."],
         unknowns=unknowns_a,
         overall_strength=strength_a,
         deterministic_issues=layer1_a,
@@ -391,8 +414,8 @@ async def generate_theft_hypotheses(db: AsyncSession, case: Case) -> List[Hypoth
             "time": shelf_time_str.split(" - ")[0],
             "time_parsed": shelf_dt.isoformat(),
             "location": shelf_loc,
-            "description": f"{p1_label} disconnects {item_name} from display stand.",
-            "evidence_sources": [s for s in shelf_ev_sources if "cctv" in s.lower()] or ["cctv_aisle.mp4"],
+            "description": f"{p1_label} accesses or detaches {item_name} at {shelf_loc}.",
+            "evidence_sources": [s for s in shelf_ev_sources if any(kw in s.lower() for kw in ["cctv", "cam", "video", "shelf"])] or shelf_ev_sources[:1],
             "observation_ids": shelf_obs_ids,
             "entity_ids": [p1_label] + ([p1_id] if p1_id else [])
         },
@@ -402,19 +425,19 @@ async def generate_theft_hypotheses(db: AsyncSession, case: Case) -> List[Hypoth
             "time": corridor_time_str,
             "time_parsed": corridor_dt.isoformat(),
             "location": corridor_loc,
-            "description": f"{p1_label} hands device to an unidentified second accomplice (P2) in unmonitored corridor.",
-            "evidence_sources": ["corridor_coverage_gap"],
+            "description": f"{p1_label} transfers item to second entity (P2) within {corridor_loc.lower()}.",
+            "evidence_sources": corridor_ev_sources,
             "observation_ids": [],
             "entity_ids": [p1_label, "P2"]
         },
         {
             "step": 4,
             "phase": "SEPARATE_EXIT",
-            "time": f"{exit_time_str} - 8:48 PM",
+            "time": f"{exit_time_str} - {(exit_dt + timedelta(minutes=3)).strftime('%I:%M %p').lstrip('0')}",
             "time_parsed": exit_dt.isoformat(),
-            "location": f"{exit_loc} / Parking Area",
-            "description": f"{p1_label} exits store clean as decoy while P2 leaves via rear/outside vehicle.",
-            "evidence_sources": [exit_ev_sources[0], "vehicle_sighting.txt"],
+            "location": f"{exit_loc} / Perimeter",
+            "description": f"{p1_label} departs clean through {exit_loc.lower()} while P2 exits separately.",
+            "evidence_sources": exit_ev_sources[:1] if exit_ev_sources else corridor_ev_sources,
             "observation_ids": exit_obs_ids,
             "entity_ids": [p1_label, "P2"]
         }
@@ -434,8 +457,8 @@ async def generate_theft_hypotheses(db: AsyncSession, case: Case) -> List[Hypoth
         observations=list(obs),
         deterministic_issues=layer1_b,
         gap_dicts=gap_dicts,
-        assumptions=["Existence of second accomplice inside store", "Hand-off occurred during unmonitored corridor window"],
-        unknowns=["No physical or visual evidence directly confirms presence of a second actor at the shelf or corridor."],
+        assumptions=["Existence of second accomplice inside premises", f"Hand-off occurred during {corridor_time_str} window"],
+        unknowns=["No physical or visual evidence directly confirms presence of a second actor in the coverage gap."],
         is_speculative_branch=True
     )
 
@@ -443,14 +466,14 @@ async def generate_theft_hypotheses(db: AsyncSession, case: Case) -> List[Hypoth
         case_id=case.id,
         label="Hypothesis B: Two-Person Accomplice Hand-Off",
         description=(
-            f"Candidate Entity {p1_label} extracted the {item_name} from the display stand and passed it "
-            f"to an unidentified accomplice (P2) inside the surveillance blind spot, who exited separately."
+            f"Candidate Entity {p1_label} accessed {item_name} at {shelf_loc} and passed it "
+            f"to an unidentified accomplice (P2) inside {corridor_loc}, who exited separately."
         ),
         sequence=p2_sequence,
         supporting_claim_ids=claim_ids[:1],
         contradicting_claim_ids=[],
-        assumptions=["Existence of second accomplice inside store", "Hand-off occurred during 8:42-8:45 PM window"],
-        unknowns=["No physical or visual evidence directly confirms presence of a second actor at the shelf."],
+        assumptions=["Existence of second accomplice inside premises", f"Hand-off occurred during {corridor_time_str} window"],
+        unknowns=["No physical or visual evidence directly confirms presence of a second actor at the shelf or coverage gap."],
         overall_strength=strength_b,
         deterministic_issues=layer1_b,
         ai_challenge_notes=layer2_b,
