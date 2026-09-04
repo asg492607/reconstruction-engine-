@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+*.sqlite3
+*.db
+data/
+uploads/
+storage/
+.env
+firebase_service_account.json
+frontend/node_modules/
+frontend/dist/
