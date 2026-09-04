@@ -193,14 +193,15 @@ export default function LeadInvestigatorDashboard({
                 <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-main)' }}>
                   Hypothesis A: Rapid Forced Entry & Exfiltration
                 </span>
-                <span className="badge badge-blue">Plausibility: 88%</span>
+                <span className="badge badge-blue">Strong Support</span>
               </div>
               <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: '8px' }}>
                 Perpetrator crowbarred alley service door at 02:45, targeted pre-identified high-value iPhone stock in backroom, and departed in dark sedan by 02:54.
               </p>
               <div style={{ display: 'flex', gap: '8px', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
                 <span>• 4 Supporting Claims</span>
-                <span>• 0 Hard Physical Contradictions</span>
+                <span>• 0 Contradictory Physical Findings</span>
+                <span>• 3 Independent Sources</span>
               </div>
             </div>
 
@@ -214,13 +215,13 @@ export default function LeadInvestigatorDashboard({
                 <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-main)' }}>
                   Hypothesis B: Staged Break-In / Inside Collusion
                 </span>
-                <span className="badge badge-amber">Plausibility: 42%</span>
+                <span className="badge badge-amber">Challenged / Inconsistent</span>
               </div>
               <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: '8px' }}>
                 Night security guard collusion: keycard disablement window matching alley door access.
               </p>
               <div style={{ display: 'flex', gap: '8px', fontSize: '0.72rem', color: '#dc2626' }}>
-                <span>• Contradicted by deep pry toolmark telemetry</span>
+                <span>• Challenged by deep pry toolmark telemetry</span>
               </div>
             </div>
           </div>
@@ -252,10 +253,10 @@ export default function LeadInvestigatorDashboard({
                 <span style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--danger-text)' }}>
                   CCTV Blindspot & Blackout Interval
                 </span>
-                <span className="badge badge-red">CRITICAL GAP</span>
+                <span className="badge badge-red">COVERAGE VOID</span>
               </div>
               <p style={{ fontSize: '0.8rem', color: 'var(--text-main)', lineHeight: 1.5 }}>
-                15-minute coverage gap between 02:40 and 02:55 on Camera #2 (Alley Exit). Action required: Subpoena municipal traffic cameras at Elm & 5th.
+                15-minute coverage void between 02:40 and 02:55 on Camera #2 (Alley Exit). Potential additional source: municipal traffic camera at Elm & 5th. Suggested action: request footage via applicable agency procedure.
               </p>
             </div>
 

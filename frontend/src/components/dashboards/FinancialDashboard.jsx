@@ -77,21 +77,33 @@ export default function FinancialDashboard({ evidence = [], onNavigate }) {
             3 IMEIs
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--success-text)', fontWeight: 600, marginTop: '4px' }}>
-            Broadcasted to Stolen Device DB
+            Matched against authorized registry dataset
           </div>
         </div>
 
         <div className="card" style={{ padding: '18px' }}>
           <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px' }}>
-            Fencing / Marketplace Flag
+            Secondary Market Flag
           </div>
           <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#d97706' }}>
-            1 Alert
+            1 Flag
           </div>
           <div style={{ fontSize: '0.75rem', color: '#d97706', marginTop: '4px' }}>
-            Online listing match within 12h
+            Candidate listing match in supplied data
           </div>
         </div>
+      </div>
+
+      {/* Discrepancy Context Banner */}
+      <div style={{
+        padding: '12px 16px',
+        backgroundColor: 'var(--bg-accent-light)',
+        border: '1px solid var(--primary-border)',
+        borderRadius: 'var(--radius-md)',
+        fontSize: '0.8rem',
+        color: 'var(--text-main)'
+      }}>
+        <strong>Investigative Context:</strong> Inventory discrepancy and the absence of a point-of-sale transaction constitute corroborating observations; they are evaluated alongside physical and visual evidence rather than assumed as autonomous proof of theft.
       </div>
 
       {/* Stolen Inventory Table */}

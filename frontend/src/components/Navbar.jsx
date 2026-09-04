@@ -34,7 +34,7 @@ export default function Navbar({
     { id: 'gaps', label: 'Gaps & Conflicts', icon: AlertTriangle },
     { id: 'entities', label: 'Entities', icon: Users },
     { id: 'copilot', label: 'AI Copilot', icon: Cpu },
-    { id: 'dossier', label: 'Dossier', icon: FileText },
+    { id: 'dossier', label: 'Evidence Report', icon: FileText },
   ];
 
   const getRoleBadgeClass = (role) => {
@@ -42,6 +42,7 @@ export default function Navbar({
       case 'LEAD_INVESTIGATOR': return 'badge-blue';
       case 'FORENSIC_SPECIALIST': return 'badge-purple';
       case 'FINANCIAL_AUDITOR': return 'badge-amber';
+      case 'LEGAL_REVIEWER':
       case 'PROSECUTOR_JUDGE': return 'badge-green';
       default: return 'badge-slate';
     }

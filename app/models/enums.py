@@ -108,6 +108,12 @@ class ClaimStrength(str, Enum):
     WEAK = "WEAK"
     SPECULATIVE = "SPECULATIVE"
 
+class EvidenceSupportLevel(str, Enum):
+    STRONG = "STRONG"
+    MODERATE = "MODERATE"
+    LIMITED = "LIMITED"
+    SPECULATIVE = "SPECULATIVE"
+
 class HypothesisStatus(str, Enum):
     DRAFT = "DRAFT"
     CHALLENGED = "CHALLENGED"

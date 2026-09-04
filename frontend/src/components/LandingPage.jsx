@@ -60,7 +60,6 @@ export default function LandingPage({ onOpenAuth, onQuickDemo }) {
             <button 
               onClick={() => onQuickDemo('LEAD')}
               className="btn btn-secondary"
-              style={{ display: 'none', mdDisplay: 'inline-flex' }}
             >
               <Sparkles size={16} color="var(--primary)" />
               Try Live Demo
@@ -69,7 +68,7 @@ export default function LandingPage({ onOpenAuth, onQuickDemo }) {
               onClick={onOpenAuth}
               className="btn btn-primary"
             >
-              Sign In / Register
+              Sign In / Access
               <ArrowRight size={16} />
             </button>
           </div>
@@ -82,7 +81,7 @@ export default function LandingPage({ onOpenAuth, onQuickDemo }) {
         padding: '80px 16px 60px 16px',
         textAlign: 'center'
       }}>
-        <div style={{ maxWidth: '880px', margin: '0 auto' }}>
+        <div style={{ maxWidth: '920px', margin: '0 auto' }}>
           <div style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -98,30 +97,30 @@ export default function LandingPage({ onOpenAuth, onQuickDemo }) {
             marginBottom: '24px'
           }}>
             <Sparkles size={14} />
-            Theft Investigation & Multi-Modal Reconstruction Platform
+            Evidence Intelligence & Reconstruction Platform
           </div>
 
           <h1 style={{
-            fontSize: 'clamp(2.2rem, 5vw, 3.75rem)',
+            fontSize: 'clamp(2.2rem, 5vw, 3.6rem)',
             fontWeight: 800,
             color: 'var(--text-main)',
-            lineHeight: 1.15,
+            lineHeight: 1.18,
             letterSpacing: '-0.03em',
             marginBottom: '20px'
           }}>
-            Reconstruct Crime Reality with <span style={{ color: 'var(--primary)' }}>Empirical Precision</span>
+            Synthesize Heterogeneous Theft Evidence into <span style={{ color: 'var(--primary)' }}>Traceable Intelligence</span>
           </h1>
 
           <p style={{
-            fontSize: 'clamp(1rem, 2vw, 1.25rem)',
+            fontSize: 'clamp(1rem, 2vw, 1.2rem)',
             color: 'var(--text-muted)',
             lineHeight: 1.6,
             marginBottom: '36px',
-            maxWidth: '720px',
+            maxWidth: '780px',
             marginLeft: 'auto',
             marginRight: 'auto'
           }}>
-            Synthesize physical toolmarks, CCTV sequences, cyber audit trails, and financial records into validated timelines. Self-challenging AI models present provable hypotheses while preserving evidentiary integrity.
+            RRE transforms scattered theft evidence into traceable observations, routes evidence to authorized specialist departments, correlates independent findings across time and entities, and generates evidence-constrained hypotheses for investigator review.
           </p>
 
           <div style={{
@@ -136,7 +135,7 @@ export default function LandingPage({ onOpenAuth, onQuickDemo }) {
               className="btn btn-primary"
               style={{ padding: '12px 28px', fontSize: '1rem' }}
             >
-              Launch Platform
+              Open Workstation
               <ArrowRight size={18} />
             </button>
             <button 
@@ -145,11 +144,11 @@ export default function LandingPage({ onOpenAuth, onQuickDemo }) {
               style={{ padding: '12px 24px', fontSize: '1rem' }}
             >
               <Database size={18} />
-              Open Case THF-2026-0001
+              Explore Demo Case (Electronics Store Burglary)
             </button>
           </div>
 
-          {/* Trust Safeguards Bar */}
+          {/* Core Design Principles Bar */}
           <div style={{
             display: 'flex',
             flexWrap: 'wrap',
@@ -162,19 +161,19 @@ export default function LandingPage({ onOpenAuth, onQuickDemo }) {
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <CheckCircle size={16} color="var(--primary)" />
-              SHA-256 Tamper Evident
+              SHA-256 Tamper-Evident Hashing
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <CheckCircle size={16} color="var(--primary)" />
-              Strict ABAC Departmental Routing
+              Two-Layer Deterministic & AI Challenge
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <CheckCircle size={16} color="var(--primary)" />
-              Judicial Non-Automated Guilt Guarantee
+              Non-Verdict Design: Human Decisions in Control
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <CheckCircle size={16} color="var(--primary)" />
-              Live Gemini 3.6 Flash Engine
+              Digital Evidence Preservation Informed
             </div>
           </div>
         </div>
@@ -185,10 +184,10 @@ export default function LandingPage({ onOpenAuth, onQuickDemo }) {
         <div className="container-xl">
           <div style={{ textAlign: 'center', marginBottom: '48px' }}>
             <h2 style={{ fontSize: '1.875rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: '12px' }}>
-              Built for Specialized Investigation Disciplines
+              Specialized Departmental Analysis & Correlation
             </h2>
-            <p style={{ color: 'var(--text-muted)', maxWidth: '640px', margin: '0 auto', fontSize: '0.95rem' }}>
-              Departmental separation ensures evidence stays segregated by domain while synthesizing into high-fidelity reconstruction hypotheses.
+            <p style={{ color: 'var(--text-muted)', maxWidth: '680px', margin: '0 auto', fontSize: '0.95rem' }}>
+              Departments analyze evidence independently within their authorized queues, while the correlation layer synthesizes unified timelines and highlights cross-source inconsistencies.
             </p>
           </div>
 
@@ -213,10 +212,10 @@ export default function LandingPage({ onOpenAuth, onQuickDemo }) {
                 <Search size={24} />
               </div>
               <h3 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '8px' }}>
-                Multi-Source Intake & Routing
+                Classification & Departmental Policy Routing
               </h3>
               <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
-                Automatically classifies physical forensics, CCTV videos, audit logs, witness statements, and invoices into appropriate departmental queues.
+                Classifies incoming files into evidence types and evaluates analysis recommendations against strict Attribute-Based Access Control (ABAC) policies.
               </p>
             </div>
 
@@ -236,10 +235,10 @@ export default function LandingPage({ onOpenAuth, onQuickDemo }) {
                 <Layers size={24} />
               </div>
               <h3 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '8px' }}>
-                Correlated Master Timeline
+                Multi-Source Chronology & Provenance
               </h3>
               <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
-                Synthesizes disparate evidence timestamps onto a normalized timeline. Highlights temporal clusters and automatically flags coverage blackouts.
+                Normalizes camera clocks, access logs, and inventory audit timestamps onto a correlated timeline with full data provenance back to original files.
               </p>
             </div>
 
@@ -262,7 +261,7 @@ export default function LandingPage({ onOpenAuth, onQuickDemo }) {
                 Gaps & Conflicts Radar
               </h3>
               <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
-                Cross-references testimony against empirical telemetry (e.g., CCTV timestamps vs witness claims) to surface contradictions and investigation gaps.
+                Flags surveillance coverage voids and highlights contradictions between witness statements and electronic telemetry for human investigator resolution.
               </p>
             </div>
 
@@ -282,10 +281,10 @@ export default function LandingPage({ onOpenAuth, onQuickDemo }) {
                 <Scale size={24} />
               </div>
               <h3 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '8px' }}>
-                Self-Challenging Hypotheses
+                Evidence Support Levels & Self-Challenge
               </h3>
               <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
-                Generates competing theft hypotheses (e.g., forced entry vs inside collusion), submits them to automated counter-argument tests, and leaves human investigators in control.
+                Synthesizes competing theft explanations, evaluates support levels (Strong / Moderate / Speculative), and subjects each hypothesis to deterministic and AI counter-point tests.
               </p>
             </div>
           </div>
@@ -296,10 +295,10 @@ export default function LandingPage({ onOpenAuth, onQuickDemo }) {
       <section style={{ padding: '60px 16px', backgroundColor: '#ffffff' }}>
         <div className="container-xl" style={{ textAlign: 'center' }}>
           <h2 style={{ fontSize: '1.65rem', fontWeight: 800, marginBottom: '10px' }}>
-            Tailored Role Dashboards
+            Workstation Views by Operational Role
           </h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '32px' }}>
-            Click below to inspect the platform through specific role perspectives:
+            Select an operational perspective to inspect how RRE organizes and presents specialized findings:
           </p>
 
           <div style={{
@@ -312,25 +311,25 @@ export default function LandingPage({ onOpenAuth, onQuickDemo }) {
               onClick={() => onQuickDemo('LEAD')}
               className="btn btn-outline"
             >
-              🕵️ Lead Investigator
+              🕵️ Lead Investigator Workstation
             </button>
             <button 
               onClick={() => onQuickDemo('FORENSIC')}
               className="btn btn-outline"
             >
-              🔬 Forensic Specialist
+              🔬 Forensic Specialist Workstation
             </button>
             <button 
               onClick={() => onQuickDemo('FINANCIAL')}
               className="btn btn-outline"
             >
-              💼 Financial Auditor
+              💼 Financial Crimes & Loss Analyst
             </button>
             <button 
               onClick={() => onQuickDemo('JUDGE')}
               className="btn btn-outline"
             >
-              ⚖️ Prosecutor / Magistrate
+              📋 External Legal Review & Report Export
             </button>
           </div>
         </div>
@@ -347,10 +346,10 @@ export default function LandingPage({ onOpenAuth, onQuickDemo }) {
       }}>
         <div className="container-xl">
           <div style={{ fontWeight: 700, color: 'var(--text-main)', marginBottom: '6px' }}>
-            Reality Reconstruction Engine (RRE) • Law Enforcement AI Framework
+            Reality Reconstruction Engine (RRE 2.0) • Evidence Intelligence Platform
           </div>
           <div>
-            Adheres to ISO/IEC 27037 Digital Forensics Standards • Model Transparency & Evidentiary Safeguards Guaranteed
+            Built on Non-Verdict Design Principles • Evidence handling informed by digital preservation standards • Human investigators maintain exclusive decision authority
           </div>
         </div>
       </footer>

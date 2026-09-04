@@ -20,8 +20,7 @@ export default function DossierViewer({
   hypotheses = [], 
   gapsConflicts = [] 
 }) {
-  const [generating, setGenerating] = useState(false);
-  const [reportTitle, setReportTitle] = useState("Official Case Reconstruction Dossier");
+  const [reportTitle, setReportTitle] = useState("Evidence Reconstruction Report");
 
   const handlePrint = () => {
     window.print();
@@ -40,7 +39,7 @@ export default function DossierViewer({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Dossier_${caseData?.case_number || 'THF-2026'}.json`;
+    a.download = `Evidence_Report_${caseData?.case_number || 'THF-2026'}.json`;
     a.click();
   };
 
@@ -50,10 +49,10 @@ export default function DossierViewer({
       <div className="card" style={{ padding: '16px 24px', display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
         <div>
           <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-main)' }}>
-            Judicial Dossier & Case Archive
+            Evidence Reconstruction Report & Export
           </h2>
           <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            Official forensic documentation conforming to judicial evidentiary standards.
+            Traceable investigative report synthesizing multi-department observations, timelines, and consistency challenges.
           </p>
         </div>
 
@@ -64,30 +63,30 @@ export default function DossierViewer({
           </button>
           <button onClick={handlePrint} className="btn btn-primary">
             <Printer size={16} />
-            Print Dossier
+            Print Report
           </button>
         </div>
       </div>
 
-      {/* Official Printed Style Dossier Document */}
+      {/* Official Printed Style Report Document */}
       <div className="card" style={{ padding: '48px', backgroundColor: '#ffffff', border: '1px solid var(--border-light)', boxShadow: 'var(--shadow-md)' }}>
         {/* Document Header */}
         <div style={{ borderBottom: '2px solid var(--text-main)', paddingBottom: '20px', marginBottom: '28px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
             <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-              REALITY RECONSTRUCTION ENGINE • FORENSIC DOSSIER
+              REALITY RECONSTRUCTION ENGINE • EVIDENCE RECONSTRUCTION REPORT
             </div>
             <h1 style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--text-main)', marginTop: '4px' }}>
               {caseData?.title || 'Commercial Burglary Reconstruction'}
             </h1>
             <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-              Case File: <strong>{caseData?.case_number || 'THF-2026-0001'}</strong> • Jurisdiction: Metropolitan Police District 4
+              Case File: <strong>{caseData?.case_number || 'THF-2026-0001'}</strong> • Department: Investigation Division
             </div>
           </div>
 
           <div style={{ textAlign: 'right' }}>
-            <span className="badge badge-green" style={{ fontSize: '0.75rem' }}>
-              ADMISSIBLE EVIDENTIARY ARCHIVE
+            <span className="badge badge-blue" style={{ fontSize: '0.75rem' }}>
+              INVESTIGATION SUPPORT REPORT
             </span>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '6px' }}>
               Date: {new Date().toLocaleDateString()}
@@ -95,36 +94,36 @@ export default function DossierViewer({
           </div>
         </div>
 
-        {/* Section 1: Statutory AI Disclosure */}
+        {/* Section 1: Non-Verdict Design & Methodology Disclosure */}
         <div style={{
-          backgroundColor: 'var(--bg-app)',
+          backgroundColor: '#f8fafc',
           borderLeft: '4px solid var(--primary)',
           padding: '16px 20px',
           marginBottom: '28px',
           borderRadius: '0 var(--radius-md) var(--radius-md) 0'
         }}>
           <h3 style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--primary)', marginBottom: '4px' }}>
-            Statutory AI Methodology & Procedural Disclosure
+            Non-Verdict Design Principle & Methodology Disclosure
           </h3>
           <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
-            This dossier was compiled using the Reality Reconstruction Engine (RRE 2.0). All source artifacts are cryptographically preserved via immutable SHA-256 hashes. Automated intelligence modules were constrained to empirical observation synthesis, anomaly detection, and counter-factual testing. No model is empowered to formulate guilt determinations.
+            This report was assembled using the Reality Reconstruction Engine (RRE). RRE transforms scattered theft evidence into traceable observations, routes evidence to authorized specialist departments, correlates their independent findings across time and entities, and generates evidence-constrained hypotheses for investigator review. All source artifacts are cryptographically preserved via immutable SHA-256 digests. RRE never asserts individual culpability or issues legal verdicts; admissibility and guilt determinations remain strictly human, procedural, and judicial responsibilities.
           </p>
         </div>
 
         {/* Section 2: Executive Summary */}
         <div style={{ marginBottom: '28px' }}>
           <h3 style={{ fontSize: '1.05rem', fontWeight: 800, borderBottom: '1px solid var(--border-light)', paddingBottom: '8px', marginBottom: '12px' }}>
-            1. Executive Investigation Summary
+            1. Investigative Case Summary
           </h3>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-main)', lineHeight: 1.6 }}>
-            On the night of investigation, commercial premises suffered forced exterior entry through the alleyway service portal. Forensic toolmark measurements indicate an 18mm curved crowbar was leveraged to defeat the strike plate. Physical inventory audit established a verified deficit of 3 units Apple iPhone 16 Pro Max (Aggregate value: $4,200.00). Correlated CCTV and vehicle sighting telemetry places an unidentified dark sedan exiting 5th Ave at 02:55.
+            During the investigative window, commercial premises sustained an exterior breach at the rear alley entrance. Forensic assisted toolmark analysis records mechanical strike plate deformation. Inventory audits establish an unexplained deficit of 3 units Apple iPhone 16 Pro Max (approximate retail value: $4,200.00). Correlated visual telemetry and vehicle records document an unregistered dark sedan departing 5th Ave at 02:55.
           </p>
         </div>
 
-        {/* Section 3: Chain of Custody & Evidence Inventory */}
+        {/* Section 3: Chain of Custody & Evidence Vault Inventory */}
         <div style={{ marginBottom: '28px' }}>
           <h3 style={{ fontSize: '1.05rem', fontWeight: 800, borderBottom: '1px solid var(--border-light)', paddingBottom: '8px', marginBottom: '12px' }}>
-            2. Evidentiary Chain of Custody
+            2. Evidence Vault Integrity & Custody Trail
           </h3>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
             <thead>
@@ -152,29 +151,29 @@ export default function DossierViewer({
           </table>
         </div>
 
-        {/* Section 4: Reconstructed Hypotheses & Plausibility */}
+        {/* Section 4: Reconstructed Hypotheses & Evidence Support Levels */}
         <div style={{ marginBottom: '28px' }}>
           <h3 style={{ fontSize: '1.05rem', fontWeight: 800, borderBottom: '1px solid var(--border-light)', paddingBottom: '8px', marginBottom: '12px' }}>
-            3. Formulated Hypotheses Evaluation
+            3. Evidence-Constrained Hypotheses Evaluation
           </h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div style={{ padding: '14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                <strong>Hypothesis A: Rapid Forced Entry & Exfiltration</strong>
-                <span className="badge badge-blue">88% Plausibility</span>
+                <strong>Hypothesis A: Rapid Forced Entry & Storage Exfiltration</strong>
+                <span className="badge badge-green">STRONG EVIDENCE SUPPORT</span>
               </div>
               <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                Conforms with physical pry toolmarks on exterior strike plate, CCTV entry window (02:45), targeted stolen inventory selection, and dark sedan departure (02:55).
+                Corroborated by physical strike plate pry marks, CCTV entry window (02:45), targeted missing device serials, and dark sedan departure (02:55). 4 supporting claims, 0 unresolved contradictions.
               </p>
             </div>
 
             <div style={{ padding: '14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                <strong>Hypothesis B: Inside Assistance / Staged Break-In</strong>
-                <span className="badge badge-amber">42% Plausibility (Challenged)</span>
+                <strong>Hypothesis B: Unforced Inside Entry / Staged Breach</strong>
+                <span className="badge badge-amber">LIMITED EVIDENCE SUPPORT (Challenged)</span>
               </div>
               <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                Degraded by forensic telemetry: Exterior mechanical prying force inconsistent with insider keycard disengagement.
+                Hypothesis B has been challenged by the following evidence inconsistency: Exterior strike plate deformation documents forced mechanical leverage, which contradicts the unforced insider entry scenario.
               </p>
             </div>
           </div>
@@ -189,9 +188,9 @@ export default function DossierViewer({
           </div>
 
           <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>JUDICIAL SEAL:</div>
-            <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--success-text)' }}>RRE-DIGITAL-SIGNATURE-VERIFIED</div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Archived to Immutable Ledger</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>INTEGRITY VERIFICATION:</div>
+            <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--primary)' }}>RRE-EVIDENCE-DIGEST-VERIFIED</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Signed to Immutable Audit Ledger</div>
           </div>
         </div>
       </div>

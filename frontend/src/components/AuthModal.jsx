@@ -382,8 +382,8 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
                   <option value="LEAD_INVESTIGATOR">Lead Investigator</option>
                   <option value="INVESTIGATOR">Field Investigator</option>
                   <option value="FORENSIC_SPECIALIST">Forensic Specialist</option>
-                  <option value="FINANCIAL_AUDITOR">Financial Auditor</option>
-                  <option value="PROSECUTOR_JUDGE">Prosecutor / Judge</option>
+                  <option value="FINANCIAL_AUDITOR">Financial Analyst</option>
+                  <option value="PROSECUTOR_JUDGE">External Legal Reviewer</option>
                   <option value="ADMIN">System Admin</option>
                 </select>
               </div>
@@ -517,10 +517,10 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
             >
               <div>
                 <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-main)' }}>
-                  Magistrate Patricia Vance
+                  Patricia Vance
                 </div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  Role: PROSECUTOR_JUDGE • Evidentiary Dossier Review
+                  Role: Legal Reviewer • Controlled Report Export & Review
                 </div>
               </div>
               <span className="badge badge-green">Select</span>

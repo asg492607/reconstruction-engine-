@@ -66,8 +66,8 @@ export default function CopilotChat({ caseId }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', height: 'calc(100vh - 180px)' }}>
       {/* Safeguard Notice */}
       <div style={{
-        backgroundColor: 'var(--bg-accent-light)',
-        border: '1px solid var(--primary-border)',
+        backgroundColor: '#f8fafc',
+        border: '1px solid var(--border-light)',
         borderRadius: 'var(--radius-md)',
         padding: '10px 16px',
         display: 'flex',
@@ -78,7 +78,7 @@ export default function CopilotChat({ caseId }) {
       }}>
         <ShieldAlert size={18} color="var(--primary)" style={{ flexShrink: 0 }} />
         <span>
-          <strong>Evidentiary Safeguard:</strong> This AI copilot is strictly barred from asserting criminal culpability or guilt. All conclusions require independent detective verification.
+          <strong>Non-Verdict Design Principle:</strong> RRE Copilot is an evidence intelligence assistant. It does not evaluate witness truthfulness, assert individual culpability, or issue judicial verdicts. All findings require independent detective validation.
         </span>
       </div>
 

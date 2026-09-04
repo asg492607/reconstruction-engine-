@@ -36,10 +36,10 @@ export default function ForensicDashboard({ evidence = [], observations = [], on
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
             <span className="badge badge-purple">Forensic Examination Workstation</span>
-            <span className="badge badge-slate">ISO/IEC 27037 Compliant</span>
+            <span className="badge badge-slate">Digital Evidence Preservation Informed</span>
           </div>
           <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: '4px' }}>
-            Physical Toolmarks & Visual Forensics Lab
+            Toolmark Feature Extraction & Visual Media Workstation
           </h1>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
             Specialist: Dr. Aris Thorne • Department: Forensics & Biometrics
@@ -64,13 +64,13 @@ export default function ForensicDashboard({ evidence = [], observations = [], on
       }}>
         <div className="card" style={{ padding: '18px' }}>
           <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px' }}>
-            Toolmark Impressions
+            Assisted Toolmark Measurement
           </div>
           <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-main)' }}>
-            2 Distinct
+            18mm Profile
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-            Curved Crowbar (18mm bit)
+            Extracted region awaiting specialist signoff
           </div>
         </div>
 

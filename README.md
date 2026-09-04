@@ -1,5 +1,5 @@
 # Reality Reconstruction Engine (RRE 2.0)
-### AI-Assisted Multi-Modal Evidence Intelligence & Crime Scene Reconstruction Platform
+### Evidence Intelligence & Theft Reconstruction Platform
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688.svg?style=flat&logo=fastapi)](https://fastapi.tiangolo.com)
 [![React](https://img.shields.io/badge/React-19-61DAFB.svg?style=flat&logo=react)](https://react.dev)
@@ -13,52 +13,74 @@
 
 ## 🔍 Overview
 
-The **Reality Reconstruction Engine (RRE 2.0)** is an empirical, multi-modal evidence intelligence platform designed for law enforcement detectives, forensic examiners, financial auditors, and prosecutors.
+The **Reality Reconstruction Engine (RRE 2.0)** transforms scattered theft evidence into traceable observations, routes evidence to authorized specialist departments, correlates their independent findings across time and entities, and generates evidence-constrained hypotheses for investigator review.
 
-Instead of treating AI output as factual conclusions, RRE enforces a rigorous, mathematically and cryptographically grounded pipeline:
-- **Original Evidence is Immutable**: Every file is hashed with SHA-256 upon intake (ISO/IEC 27037).
-- **Canonical Separation of Data**: Strictly distinguishes `Evidence -> Observation -> Finding -> Claim -> Correlated Event -> Hypothesis -> Verified Finding`.
-- **Two-Layer Self-Challenge**: Formulates competing theft hypotheses and subjects them to deterministic physics rules (Layer 1) and adversarial counter-arguments via **Google Gemini 3.6 Flash** (Layer 2).
-- **Statutory Non-Automated Guilt Guarantee**: AI models are barred from determining guilt; conclusions remain exclusively under human judicial authority.
+Instead of treating AI output as factual conclusions, RRE enforces a rigorous, defendable architecture:
+- **Evidence Vault & Integrity**: Every original file is preserved immutably with SHA-256 cryptographic hashing upon intake, informed by digital-evidence collection and preservation principles.
+- **Strict Separation of Evidentiary Layers**: `Evidence → Observation → Finding → Claim → Correlated Event → Candidate Entity → Hypothesis → Verified Finding`.
+- **Assisted Analysis & Human Verification**: Forensic and financial engines provide assisted measurement and feature extraction; human specialists review and record findings.
+- **Two-Layer Validation & Self-Challenge**: Subjects hypotheses to deterministic evidence & consistency validation (Layer 1) and adversarial AI counter-evidence review (Layer 2).
+- **Categorical Evidence Support Levels**: Replaces misleading percentage probability claims with transparent support levels (`STRONG`, `MODERATE`, `LIMITED`, `SPECULATIVE`) showing citations, contradictions, and coverage gaps.
+- **Non-Verdict Design Principle**: RRE never determines individual guilt or renders judicial verdicts; admissibility and culpability remain strictly human and procedural determinations.
 
 ---
 
-## 🏛️ System Architecture
+## 🏛️ System Flow & Architecture
 
 ```
-                                  [EVIDENCE INTAKE VAULT]
-                                             |
-                                  (SHA-256 Tamper Evident)
-                                             |
-                                [CLASSIFICATION & ROUTING]
-                                             |
-        +------------------+-----------------+------------------+------------------+
-        |                  |                 |                  |                  |
-   [Forensic Lab]     [Visual Media]   [Cyber / Access]   [Financial Crimes]  [Witness / Field]
-   Toolmarks & Photos  CCTV Timestamps   Badge Swipes      Inventory & IMEIs   Credibility Weight
-        |                  |                 |                  |                  |
-        +------------------+-----------------+------------------+------------------+
-                                             |
-                               [CANDIDATE ENTITY NETWORK]
-                               (Human-Confirmed Identities)
-                                             |
-                               [CORRELATED TIMELINE MASTER]
-                               (Multi-Source Synchronization)
-                                             |
-                                [GAPS & CONFLICTS RADAR]
-                                (Coverage Blackout Detector)
-                                             |
-                             [RECONSTRUCTION STUDIO (A / B)]
-                                (Multi-Hypothesis Synthesis)
-                                             |
-                            [TWO-LAYER SELF-CHALLENGE (AI)]
-                             (Layer 1 Rules + Layer 2 Gemini)
-                                             |
-                                [HUMAN VERIFICATION GATE]
-                               (Detective & Specialist Signoff)
-                                             |
-                              [OFFICIAL JUDICIAL DOSSIER]
-                              (Printable & JSON Court Record)
+                         RRE
+                          │
+                  CASE & POLICY
+                          │
+                          ▼
+                  EVIDENCE VAULT
+             hash + custody + metadata
+                          │
+                          ▼
+              CLASSIFICATION ENGINE
+                          │
+                          ▼
+                POLICY ROUTER
+                          │
+        ┌─────────────────┼─────────────────┐
+        ▼                 ▼                 ▼
+   INVESTIGATION      FORENSICS         FINANCIAL
+     ANALYSIS          ANALYSIS          ANALYSIS
+        │                 │                 │
+        ▼                 ▼                 ▼
+   OBSERVATIONS      OBSERVATIONS      OBSERVATIONS
+        │                 │                 │
+        └─────────────────┼─────────────────┘
+                          ▼
+                 PROVENANCE LAYER
+                          │
+                          ▼
+                 ENTITY / EVENT
+                    RESOLUTION
+                          │
+                          ▼
+                 SOURCE TIMELINES
+                          │
+                          ▼
+             CROSS-SOURCE CORRELATION
+                          │
+                          ▼
+                  CLAIMS + EVENTS
+                          │
+                          ▼
+              HYPOTHESIS GENERATION
+                          │
+                ┌─────────┼─────────┐
+                ▼         ▼         ▼
+             RULES       AI       GAPS &
+           VALIDATION  CHALLENGE  CONFLICTS
+                └─────────┼─────────┘
+                          ▼
+                   HUMAN REVIEW
+                          │
+              ┌───────────┼───────────┐
+              ▼           ▼           ▼
+          COPILOT      REPORT       ARCHIVE
 ```
 
 ---
@@ -68,22 +90,22 @@ Instead of treating AI output as factual conclusions, RRE enforces a rigorous, m
 ### 1. Modern React Light-Theme Frontend
 - **Design Aesthetic**: Strict Blue & White light theme (`#2563eb` Royal Blue, `#ffffff` Crisp White, `#f8fafc` Ice Slate).
 - **Responsive Navigation**: Mobile hamburger drawer, sticky glass header, adaptive grid cards.
-- **Firebase Authentication**: Full email/password sign-in and registration with role and department selection.
+- **Firebase Authentication**: Full email/password sign-in and registration with departmental role selection.
 
-### 2. Specialized Role Dashboards
-- **Lead Investigator HUD**: Case metrics, leading hypotheses summary, high-severity anomalies, and 1-click reconstruction triggers.
-- **Forensics Specialist Workstation**: Photographic striation inspection, CCTV frame timing, and SHA-256 custody ledger.
-- **Financial Auditor Ledger**: Stolen inventory delta calculations ($4,200 loss for 3 iPhone 16 Pro Max units), IMEI broadcast, and fencing alerts.
-- **Judicial / Magistrate Review**: Admissibility oversight, statutory AI disclosures, hash matrix, and court-ready dossier export.
+### 2. Specialized Department Dashboards
+- **Lead Investigator Command**: Case metrics, leading hypotheses summary, high-severity coverage gaps, and 1-click reconstruction triggers.
+- **Forensics Specialist Workstation**: Photographic toolmark inspection, assisted measurement, and evidence custody ledger.
+- **Financial Analyst Ledger**: Inventory discrepancy calculations ($4,200 deficit for 3 iPhone 16 Pro Max units) and authorized registry matching.
+- **External Legal Review & Export**: Controlled read-only access, evidence integrity ledger, and Evidence Reconstruction Report generation.
 
 ### 3. Investigation Modules
-- **Evidence Vault**: Secure upload, automated routing, SHA-256 hash calculator, provenance inspector.
-- **Correlated Timeline**: Synchronized chronological stream with department badges and confidence scores.
-- **Reconstruction Studio**: Competing hypotheses side-by-side with live Gemini 3.6 Flash counter-arguments.
-- **Gaps & Conflicts Radar**: Detects CCTV blind spots and witness statement vs. telemetry contradictions.
-- **Entity Ground Truth Network**: Unconfirmed candidates vs. confirmed ground-truth identities with 1-click detective verification.
-- **Investigation Copilot**: Dual-mode AI assistant (`EVIDENCE_ONLY` vs. `REASONING_MODE`) with statutory non-guilt guardrails.
-- **Court Dossier Generator**: Admissible forensic report with print and JSON export.
+- **Evidence Vault**: Secure upload, policy routing, SHA-256 hash calculator, provenance inspector.
+- **Correlated Timeline**: Synchronized chronological stream with department badges and source citations.
+- **Reconstruction Studio**: Competing hypotheses evaluated across categorical Evidence Support Levels with Layer 1/Layer 2 consistency validation.
+- **Gaps & Conflicts Radar**: Detects visual blind spots, unconfirmed intervals, and testimony discrepancies.
+- **Candidate Entity Linkage Network**: Observation clusters and candidate entities with human-confirmed linkage workflows.
+- **Investigation Copilot**: Dual-mode AI assistant (`EVIDENCE_ONLY` vs. `REASONING_MODE`) with Non-Verdict design guardrails.
+- **Evidence Reconstruction Report**: Traceable investigative summary with print and JSON export.
 
 ---
 

@@ -8,7 +8,8 @@ import {
   HelpCircle, 
   Check, 
   Search,
-  Filter
+  Filter,
+  Link2
 } from 'lucide-react';
 import { api } from '../../api';
 
@@ -22,7 +23,7 @@ export default function EntityNetwork({ caseId, entities = [], onRefresh }) {
       await api.entities.confirm(caseId, entityId);
       onRefresh();
     } catch (err) {
-      alert("Failed to confirm entity: " + err.message);
+      alert("Failed to confirm linkage: " + err.message);
     } finally {
       setConfirmingId(null);
     }
@@ -49,11 +50,11 @@ export default function EntityNetwork({ caseId, entities = [], onRefresh }) {
       <div className="card" style={{ padding: '18px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '14px' }}>
         <div>
           <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Users size={20} color="var(--primary)" />
-            Extracted Entity Ground-Truth Network
+            <Link2 size={20} color="var(--primary)" />
+            Candidate Entity & Linkage Network
           </h2>
           <p style={{ fontSize: '0.825rem', color: 'var(--text-muted)' }}>
-            Distinguishes unconfirmed candidates extracted by AI from confirmed ground-truth case entities.
+            Distinguishes observation clusters and candidate entities from human-confirmed linkages.
           </p>
         </div>
 
@@ -67,9 +68,9 @@ export default function EntityNetwork({ caseId, entities = [], onRefresh }) {
             style={{ padding: '7px 12px', fontSize: '0.825rem', width: 'auto' }}
           >
             <option value="ALL">All Entity Types</option>
-            <option value="PERSON">Persons & Suspects</option>
-            <option value="VEHICLE">Vehicles</option>
-            <option value="PROPERTY">Stolen Property</option>
+            <option value="PERSON">Candidate Persons</option>
+            <option value="VEHICLE">Candidate Vehicles</option>
+            <option value="PROPERTY">Reported Discrepant Property</option>
             <option value="LOCATION">Locations</option>
           </select>
         </div>
@@ -83,7 +84,7 @@ export default function EntityNetwork({ caseId, entities = [], onRefresh }) {
       }}>
         {filteredEntities.length === 0 ? (
           <div className="card" style={{ gridColumn: '1 / -1', padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
-            No entities matching filter.
+            No candidate entities matching filter.
           </div>
         ) : (
           filteredEntities.map((entity) => {
@@ -115,12 +116,12 @@ export default function EntityNetwork({ caseId, entities = [], onRefresh }) {
                   {isConfirmed ? (
                     <span className="badge badge-green">
                       <CheckCircle2 size={12} />
-                      CONFIRMED
+                      CONFIRMED LINKAGE
                     </span>
                   ) : (
                     <span className="badge badge-amber">
                       <HelpCircle size={12} />
-                      CANDIDATE
+                      CANDIDATE LINKAGE
                     </span>
                   )}
                 </div>
@@ -145,7 +146,7 @@ export default function EntityNetwork({ caseId, entities = [], onRefresh }) {
                       String(entity.attributes)
                     )
                   ) : (
-                    'Standard case entity'
+                    'Observation cluster attributes'
                   )}
                 </div>
 
@@ -158,7 +159,7 @@ export default function EntityNetwork({ caseId, entities = [], onRefresh }) {
                     style={{ width: '100%' }}
                   >
                     <Check size={14} />
-                    {confirmingId === entity.id ? 'Confirming...' : 'Confirm Ground Truth'}
+                    {confirmingId === entity.id ? 'Confirming...' : 'Confirm Candidate Linkage'}
                   </button>
                 )}
               </div>
