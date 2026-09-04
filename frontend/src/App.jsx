@@ -120,41 +120,12 @@ export default function App() {
     }
   };
 
-  const handleQuickDemo = async (roleType) => {
-    let demoEmail = 'lead@police.gov';
-    let demoRole = 'LEAD_INVESTIGATOR';
-    let demoDept = 'INVESTIGATION';
-
-    if (roleType === 'FORENSIC') {
-      demoEmail = 'forensic@police.gov';
-      demoRole = 'FORENSIC_SPECIALIST';
-      demoDept = 'FORENSICS';
-    } else if (roleType === 'FINANCIAL') {
-      demoEmail = 'financial@police.gov';
-      demoRole = 'FINANCIAL_AUDITOR';
-      demoDept = 'FINANCIAL';
-    } else if (roleType === 'JUDGE') {
-      demoEmail = 'judge@justice.gov';
-      demoRole = 'PROSECUTOR_JUDGE';
-      demoDept = 'LEGAL';
-    }
-
-    try {
-      const data = await api.auth.login(demoEmail, 'password123');
-      setUser(data);
-    } catch (err) {
-      // Open modal if direct demo login fails
-      setAuthModalOpen(true);
-    }
-  };
-
   // Render Public Landing Page if not logged in
   if (!user) {
     return (
       <>
         <LandingPage
           onOpenAuth={() => setAuthModalOpen(true)}
-          onQuickDemo={handleQuickDemo}
         />
         <AuthModal
           isOpen={authModalOpen}

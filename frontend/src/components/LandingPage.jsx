@@ -15,7 +15,7 @@ import {
   Scale
 } from 'lucide-react';
 
-export default function LandingPage({ onOpenAuth, onQuickDemo }) {
+export default function LandingPage({ onOpenAuth }) {
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#ffffff' }}>
       {/* Top Navbar */}
@@ -57,13 +57,6 @@ export default function LandingPage({ onOpenAuth, onQuickDemo }) {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <button 
-              onClick={() => onQuickDemo('LEAD')}
-              className="btn btn-secondary"
-            >
-              <Sparkles size={16} color="var(--primary)" />
-              Try Live Demo
-            </button>
             <button 
               onClick={onOpenAuth}
               className="btn btn-primary"
@@ -135,16 +128,8 @@ export default function LandingPage({ onOpenAuth, onQuickDemo }) {
               className="btn btn-primary"
               style={{ padding: '12px 28px', fontSize: '1rem' }}
             >
-              Open Workstation
+              Access Investigation Platform
               <ArrowRight size={18} />
-            </button>
-            <button 
-              onClick={() => onQuickDemo('LEAD')}
-              className="btn btn-outline"
-              style={{ padding: '12px 24px', fontSize: '1rem' }}
-            >
-              <Database size={18} />
-              Explore Demo Case (Electronics Store Burglary)
             </button>
           </div>
 
@@ -291,46 +276,54 @@ export default function LandingPage({ onOpenAuth, onQuickDemo }) {
         </div>
       </section>
 
-      {/* Role Demonstration Showcase */}
+      {/* Departmental Specialization Overview */}
       <section style={{ padding: '60px 16px', backgroundColor: '#ffffff' }}>
         <div className="container-xl" style={{ textAlign: 'center' }}>
           <h2 style={{ fontSize: '1.65rem', fontWeight: 800, marginBottom: '10px' }}>
-            Workstation Views by Operational Role
+            Departmental Separation of Duties
           </h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '32px' }}>
-            Select an operational perspective to inspect how RRE organizes and presents specialized findings:
+            RRE isolates sensory analysis across specialized workstations to ensure chain-of-custody and evidence integrity:
           </p>
 
           <div style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            justifyContent: 'center',
-            gap: '12px'
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+            gap: '16px',
+            textAlign: 'left'
           }}>
-            <button 
-              onClick={() => onQuickDemo('LEAD')}
-              className="btn btn-outline"
-            >
-              🕵️ Lead Investigator Workstation
-            </button>
-            <button 
-              onClick={() => onQuickDemo('FORENSIC')}
-              className="btn btn-outline"
-            >
-              🔬 Forensic Specialist Workstation
-            </button>
-            <button 
-              onClick={() => onQuickDemo('FINANCIAL')}
-              className="btn btn-outline"
-            >
-              💼 Financial Crimes & Loss Analyst
-            </button>
-            <button 
-              onClick={() => onQuickDemo('JUDGE')}
-              className="btn btn-outline"
-            >
-              📋 External Legal Review & Report Export
-            </button>
+            <div className="card" style={{ padding: '20px' }}>
+              <div style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '6px', color: 'var(--text-main)' }}>
+                🕵️ Lead Investigation
+              </div>
+              <p style={{ fontSize: '0.825rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                Coordinates multi-camera surveillance intake, tracks candidate entities across checkpoints, and reviews evidence-constrained hypotheses.
+              </p>
+            </div>
+            <div className="card" style={{ padding: '20px' }}>
+              <div style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '6px', color: 'var(--text-main)' }}>
+                🔬 Physical Forensics
+              </div>
+              <p style={{ fontSize: '0.825rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                Analyzes scene imagery, toolmark telemetry, severed tethers, and physical entry marks with specialist-recorded telemetry.
+              </p>
+            </div>
+            <div className="card" style={{ padding: '20px' }}>
+              <div style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '6px', color: 'var(--text-main)' }}>
+                💼 Financial & Inventory
+              </div>
+              <p style={{ fontSize: '0.825rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                Audits POS transaction logs, identifies discrepancy windows, and validates missing serial identifiers against inventory registers.
+              </p>
+            </div>
+            <div className="card" style={{ padding: '20px' }}>
+              <div style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '6px', color: 'var(--text-main)' }}>
+                📋 Legal & Controlled Export
+              </div>
+              <p style={{ fontSize: '0.825rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                Cryptographically audits evidence hashes, verifies human verifications, and exports non-verdict reality reconstruction dossiers.
+              </p>
+            </div>
           </div>
         </div>
       </section>

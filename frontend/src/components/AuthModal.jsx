@@ -21,7 +21,7 @@ import {
 import { api } from '../api';
 
 export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
-  const [tab, setTab] = useState('login'); // 'login' | 'register' | 'demo'
+  const [tab, setTab] = useState('login'); // 'login' | 'register'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -89,25 +89,6 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
       } catch (backendErr) {
         setError(backendErr.message || err.message || "Registration failed.");
       }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleQuickLogin = async (demoEmail, demoRole, demoDept) => {
-    setEmail(demoEmail);
-    setPassword('password123');
-    setRole(demoRole);
-    setDepartment(demoDept);
-    setLoading(true);
-    setError(null);
-
-    try {
-      const data = await api.auth.login(demoEmail, 'password123');
-      onAuthSuccess(data);
-      onClose();
-    } catch (err) {
-      setError(err.message || "Quick login failed.");
     } finally {
       setLoading(false);
     }
@@ -219,25 +200,6 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
             }}
           >
             Register
-          </button>
-          <button
-            type="button"
-            onClick={() => { setTab('demo'); setError(null); }}
-            style={{
-              flex: 1,
-              padding: '8px 12px',
-              fontSize: '0.85rem',
-              fontWeight: 600,
-              borderRadius: 'var(--radius-sm)',
-              border: 'none',
-              cursor: 'pointer',
-              backgroundColor: tab === 'demo' ? '#ffffff' : 'transparent',
-              color: tab === 'demo' ? 'var(--primary)' : 'var(--text-muted)',
-              boxShadow: tab === 'demo' ? 'var(--shadow-sm)' : 'none',
-              transition: 'all 0.15s ease'
-            }}
-          >
-            ⚡ Demo Roles
           </button>
         </div>
 
@@ -417,115 +379,6 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
               <UserPlus size={16} />
             </button>
           </form>
-        )}
-
-        {/* Demo Roles 1-Click Fast Switcher */}
-        {tab === 'demo' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
-              Select an official role to inspect the pre-seeded theft investigation:
-            </p>
-
-            <button
-              type="button"
-              onClick={() => handleQuickLogin('lead@police.gov', 'LEAD_INVESTIGATOR', 'INVESTIGATION')}
-              disabled={loading}
-              className="card"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '12px 16px',
-                cursor: 'pointer',
-                textAlign: 'left'
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-main)' }}>
-                  Lead Detective Harris
-                </div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  Role: LEAD_INVESTIGATOR • Full Case Management
-                </div>
-              </div>
-              <span className="badge badge-blue">Select</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleQuickLogin('forensic@police.gov', 'FORENSIC_SPECIALIST', 'FORENSICS')}
-              disabled={loading}
-              className="card"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '12px 16px',
-                cursor: 'pointer',
-                textAlign: 'left'
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-main)' }}>
-                  Dr. Aris Thorne
-                </div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  Role: FORENSIC_SPECIALIST • Physical Toolmarks & CCTV
-                </div>
-              </div>
-              <span className="badge badge-purple">Select</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleQuickLogin('financial@police.gov', 'FINANCIAL_AUDITOR', 'FINANCIAL')}
-              disabled={loading}
-              className="card"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '12px 16px',
-                cursor: 'pointer',
-                textAlign: 'left'
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-main)' }}>
-                  Auditor Claire Sterling
-                </div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  Role: FINANCIAL_AUDITOR • Inventory & Payment Ledger
-                </div>
-              </div>
-              <span className="badge badge-amber">Select</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleQuickLogin('judge@justice.gov', 'PROSECUTOR_JUDGE', 'LEGAL')}
-              disabled={loading}
-              className="card"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '12px 16px',
-                cursor: 'pointer',
-                textAlign: 'left'
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-main)' }}>
-                  Patricia Vance
-                </div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  Role: Legal Reviewer • Controlled Report Export & Review
-                </div>
-              </div>
-              <span className="badge badge-green">Select</span>
-            </button>
-          </div>
         )}
       </div>
     </div>

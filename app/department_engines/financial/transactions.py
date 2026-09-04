@@ -56,7 +56,7 @@ class FinancialTransactionProcessor:
                         "finding": "No matching purchase transaction was recorded in provided POS records during the incident window",
                         "audit_period": "Incident Time Window"
                     },
-                    observed_time_raw="8:30 PM - 9:00 PM POS Transaction Log",
+                    observed_time_raw="POS Transaction Audit Log",
                     observed_time_parsed=base_dt,
                     time_confidence=TimeConfidence.EXACT,
                     time_source="pos_transaction_database",

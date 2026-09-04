@@ -44,18 +44,18 @@ class WitnessProcessor:
             except Exception:
                 parsed_dt = base_dt
         else:
-            time_raw = "approximately 8:40 PM"
+            time_raw = "Time unspecified in statement"
             parsed_dt = base_dt
-            time_window_min = base_dt - timedelta(minutes=15)
-            time_window_max = base_dt + timedelta(minutes=15)
+            time_window_min = None
+            time_window_max = None
 
         # 2. Extract clothing & person mentions
         clothing_match = CLOTHING_REGEX.search(statement_text)
-        clothing_desc = clothing_match.group(1).strip() if clothing_match else "dark clothing"
+        clothing_desc = clothing_match.group(1).strip() if clothing_match else "Unspecified clothing"
 
         # 3. Extract location mentions
         loc_match = LOCATION_REGEX.search(statement_text)
-        loc_desc = loc_match.group(1).strip() if loc_match else "inside store"
+        loc_desc = loc_match.group(1).strip() if loc_match else "Unspecified location"
 
         # Observation for the observed individual
         observations.append(

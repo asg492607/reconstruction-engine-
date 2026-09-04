@@ -142,16 +142,11 @@ APP_NAME="Reality Reconstruction Engine"
 ENVIRONMENT="development"
 DATABASE_URL="sqlite+aiosqlite:///./rre.db"
 GEMINI_API_KEY="your-google-gemini-api-key"
-LLM_MODEL="gemini-3.6-flash"
+LLM_MODEL="gemini-1.5-flash"
 SECRET_KEY="your-jwt-secret-key"
 ```
 
-### 3. Seed Demo Investigation Data
-```bash
-python scripts/demo_seed.py
-```
-
-### 4. Run the Application
+### 3. Run the Application
 ```bash
 # Terminal 1: FastAPI Backend
 .venv\Scripts\uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload

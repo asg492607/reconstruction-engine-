@@ -79,29 +79,36 @@ class InventoryProcessor:
                         )
                     )
         else:
-            # Fallback plain-text parsing (e.g. "iPhone 15 Pro listed at 8:30 PM, missing from 9:00 PM stock check")
+            # Fallback plain-text parsing
             lower_content = content.lower()
-            if "missing" in lower_content or "theft" in lower_content or "iphone" in lower_content:
+            if "missing" in lower_content or "discrepancy" in lower_content or "theft" in lower_content:
+                # Extract first prominent keyword or default
+                extracted_item = "Discrepant Inventory Item"
+                for kw in ["iphone 15 pro", "iphone", "smartphone", "laptop", "watch", "tablet", "jewelry"]:
+                    if kw in lower_content:
+                        extracted_item = kw.title()
+                        break
+
                 observations.append(
                     ObservationCreate(
                         evidence_id=evidence_id,
                         department=Department.INVESTIGATION,
                         observation_type=ObservationType.OBJECT_DETECTED,
                         raw_data={
-                            "item_name": "iPhone 15 Pro (unit #A)",
+                            "item_name": extracted_item,
                             "status": "CONFIRMED_DISAPPEARANCE",
                             "delta": -1,
                             "audit_note": content.strip()[:300]
                         },
-                        observed_time_raw="8:30 PM - 9:00 PM",
+                        observed_time_raw=base_dt.strftime("%Y-%m-%d %H:%M:%S UTC"),
                         observed_time_parsed=base_dt,
                         time_confidence=TimeConfidence.ESTIMATED,
                         time_source="inventory_audit",
                         time_reliability=TimeReliability.HIGH,
                         time_window_min=base_dt,
                         time_window_max=base_dt,
-                        location_label="Electronics Display Case",
-                        observation_confidence=0.95,
+                        location_label="Display Case / Stock Area",
+                        observation_confidence=0.90,
                         evidence_quality=EvidenceQuality.HIGH,
                         model_name=self.model_name,
                         model_version=self.model_version
