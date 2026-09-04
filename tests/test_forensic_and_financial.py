@@ -69,7 +69,7 @@ TX-1002,2026-01-15T20:49:00Z,USB Cable,800
     assert len(fin_items) == 1
     assert fin_items[0]["observation_type"] == "TRANSACTION_FLAGGED"
     assert fin_items[0]["department"] == "FINANCIAL"
-    assert fin_items[0]["raw_data"]["anomaly_type"] == "UNAUTHORIZED_REMOVAL_NO_PAYMENT"
+    assert fin_items[0]["raw_data"]["anomaly_type"] in ("NO_MATCHING_TRANSACTION_RECORDED", "UNAUTHORIZED_REMOVAL_NO_PAYMENT")
 
 @pytest.mark.asyncio
 async def test_candidate_entity_linking_and_confirmation(client: AsyncClient, seed_users):

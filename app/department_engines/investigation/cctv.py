@@ -66,10 +66,21 @@ class CCTVProcessor:
         is_exit = "exit" in filename.lower()
         is_aisle = "aisle" in filename.lower() or "shelf" in filename.lower()
 
+        # Relative camera offsets if not explicitly provided in metadata:
+        # Entrance occurs prior to aisle (-8 min), aisle at scene window (-4 min), exit after aisle (+1 min)
+        cam_start = start_time
+        if "start_time" not in metadata:
+            if is_entrance:
+                cam_start = start_time - timedelta(minutes=8)
+            elif is_aisle:
+                cam_start = start_time - timedelta(minutes=4)
+            elif is_exit:
+                cam_start = start_time + timedelta(minutes=1)
+
         # Generate realistic observations for the video timeline
         if is_entrance:
             event_offset_sec = 2.5
-            event_time = start_time + timedelta(seconds=event_offset_sec)
+            event_time = cam_start + timedelta(seconds=event_offset_sec)
             observations.append(
                 ObservationCreate(
                     evidence_id=evidence_id,
@@ -126,7 +137,7 @@ class CCTVProcessor:
 
         elif is_aisle:
             event_offset_sec = 5.0
-            event_time = start_time + timedelta(seconds=event_offset_sec)
+            event_time = cam_start + timedelta(seconds=event_offset_sec)
             observations.append(
                 ObservationCreate(
                     evidence_id=evidence_id,
@@ -182,8 +193,8 @@ class CCTVProcessor:
             )
 
         elif is_exit:
-            event_offset_sec = 3.0
-            event_time = start_time + timedelta(seconds=event_offset_sec)
+            event_offset_sec = 8.0
+            event_time = cam_start + timedelta(seconds=event_offset_sec)
             observations.append(
                 ObservationCreate(
                     evidence_id=evidence_id,

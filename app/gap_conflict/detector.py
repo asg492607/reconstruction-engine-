@@ -55,9 +55,11 @@ async def detect_case_gaps_and_conflicts(
         db.add(discrepancy)
         detected.append(discrepancy)
 
-    # 4. Check for inventory vs transaction conflict
     inventory_missing = any(o.observation_type.value == "OBJECT_DETECTED" for o in observations)
-    has_unauthorized_tx = any(o.raw_data.get("anomaly_type") == "UNAUTHORIZED_REMOVAL_NO_PAYMENT" for o in observations)
+    has_unauthorized_tx = any(
+        o.raw_data.get("anomaly_type") in ("UNAUTHORIZED_REMOVAL_NO_PAYMENT", "NO_MATCHING_TRANSACTION_RECORDED")
+        for o in observations
+    )
 
     if inventory_missing and has_unauthorized_tx:
         theft_conflict = GapConflict(
