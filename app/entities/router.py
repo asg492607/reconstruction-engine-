@@ -138,6 +138,41 @@ async def confirm_link(
     )
     return confirmed
 
+@router.post("/cases/{case_id}/entities/{entity_id}/confirm", response_model=CandidateEntityResponse)
+async def confirm_candidate_entity(
+    case_id: str,
+    entity_id: str,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    case = await get_case_by_id(db, case_id)
+    if not case:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
+    if not check_access(current_user, Action.CONFIRM_ENTITY_LINK, case=case):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied to confirm entity")
+
+    entity = await get_candidate_entity_by_id(db, entity_id)
+    if not entity or entity.case_id != case_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Entity not found")
+
+    from app.models.enums import IdentityStatus
+    entity.identity_status = IdentityStatus.CONFIRMED
+    await db.commit()
+    await db.refresh(entity)
+
+    await record_audit_log(
+        db=db,
+        action="CANDIDATE_ENTITY_CONFIRMED",
+        case_id=case_id,
+        user=current_user,
+        target_type="CANDIDATE_ENTITY",
+        target_id=entity.id,
+        after_state={"identity_status": "CONFIRMED", "confirmed_by": current_user.id},
+        ip_address=request.client.host if request.client else None
+    )
+    return entity
+
 @router.post("/cases/{case_id}/entities/auto-link", response_model=List[CandidateEntityLinkResponse])
 async def trigger_auto_link(
     case_id: str,

@@ -123,8 +123,22 @@ export default function ReconstructionStudio({
       {/* Hypotheses Cards Grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '20px' }}>
         {hypothesesList.map((hypo, idx) => {
-          const supportLevel = hypo.support_level || (hypo.plausibility > 0.6 ? 'STRONG' : 'LIMITED');
+          const supportLevel = hypo.overall_strength || hypo.support_level || (hypo.plausibility > 0.6 ? 'STRONG' : 'LIMITED');
           const isLeading = supportLevel === 'STRONG';
+          const title = hypo.label || hypo.title || `Hypothesis ${idx + 1}`;
+          const narrative = hypo.description || hypo.narrative || (hypo.sequence ? hypo.sequence.map(s => s.description || s.action).join('. ') : 'Synthesized scenario.');
+          const supportingCount = hypo.supporting_claims?.length || hypo.supporting_claim_ids?.length || 0;
+          const contradictingCount = hypo.contradicting_claims?.length || hypo.contradicting_claim_ids?.length || 0;
+
+          // Process self challenge notes whether array of dicts or string
+          let challengeText = '';
+          if (typeof hypo.self_challenge_notes === 'string') {
+            challengeText = hypo.self_challenge_notes;
+          } else if (Array.isArray(hypo.ai_challenge_notes) && hypo.ai_challenge_notes.length > 0) {
+            challengeText = hypo.ai_challenge_notes.map(n => typeof n === 'string' ? n : (n.note || n.challenge || JSON.stringify(n))).join(' ');
+          } else if (Array.isArray(hypo.deterministic_issues) && hypo.deterministic_issues.length > 0) {
+            challengeText = hypo.deterministic_issues.map(i => typeof i === 'string' ? i : (i.issue || i.description || JSON.stringify(i))).join(' ');
+          }
 
           return (
             <div 
@@ -140,7 +154,7 @@ export default function ReconstructionStudio({
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '14px' }}>
                 <div>
                   <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: '6px' }}>
-                    {hypo.title || `Hypothesis ${idx + 1}`}
+                    {title}
                   </h3>
                   <div style={{ display: 'flex', gap: '6px' }}>
                     <span className={isLeading ? 'badge badge-blue' : 'badge badge-slate'}>
@@ -173,15 +187,15 @@ export default function ReconstructionStudio({
               }}>
                 <div>
                   <div style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--success-text)' }}>
-                    {hypo.supporting_claims?.length || 0}
+                    {supportingCount}
                   </div>
                   <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600 }}>
                     SUPPORTING
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: '0.95rem', fontWeight: 800, color: hypo.contradicting_claims?.length ? 'var(--danger-text)' : 'var(--text-muted)' }}>
-                    {hypo.contradicting_claims?.length || 0}
+                  <div style={{ fontSize: '0.95rem', fontWeight: 800, color: contradictingCount > 0 ? 'var(--danger-text)' : 'var(--text-muted)' }}>
+                    {contradictingCount}
                   </div>
                   <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600 }}>
                     CONTRADICTIONS
@@ -208,24 +222,26 @@ export default function ReconstructionStudio({
                 marginBottom: '18px',
                 border: '1px solid var(--border-light)'
               }}>
-                {hypo.narrative || hypo.description}
+                {narrative}
               </div>
 
               {/* Supporting Claims */}
-              <div style={{ marginBottom: '14px' }}>
-                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--success-text)', textTransform: 'uppercase', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <CheckCircle size={14} />
-                  Supporting Claims & Observations ({hypo.supporting_claims?.length || 0})
+              {hypo.supporting_claims && hypo.supporting_claims.length > 0 && (
+                <div style={{ marginBottom: '14px' }}>
+                  <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--success-text)', textTransform: 'uppercase', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <CheckCircle size={14} />
+                    Supporting Claims & Observations ({hypo.supporting_claims.length})
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {hypo.supporting_claims.map((claim, cIdx) => (
+                      <div key={cIdx} style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+                        <span style={{ color: 'var(--success-text)', fontWeight: 700 }}>✓</span>
+                        <span>{typeof claim === 'string' ? claim : (claim.claim_text || claim.summary || JSON.stringify(claim))}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {hypo.supporting_claims?.map((claim, cIdx) => (
-                    <div key={cIdx} style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
-                      <span style={{ color: 'var(--success-text)', fontWeight: 700 }}>✓</span>
-                      <span>{claim}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              )}
 
               {/* Contradicting Claims */}
               {hypo.contradicting_claims && hypo.contradicting_claims.length > 0 && (
@@ -238,7 +254,7 @@ export default function ReconstructionStudio({
                     {hypo.contradicting_claims.map((claim, cIdx) => (
                       <div key={cIdx} style={{ fontSize: '0.8rem', color: 'var(--danger-text)', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
                         <span style={{ fontWeight: 700 }}>✗</span>
-                        <span>{claim}</span>
+                        <span>{typeof claim === 'string' ? claim : (claim.claim_text || claim.summary || JSON.stringify(claim))}</span>
                       </div>
                     ))}
                   </div>
@@ -246,7 +262,7 @@ export default function ReconstructionStudio({
               )}
 
               {/* Self-Challenge Consistency Notes */}
-              {hypo.self_challenge_notes && (
+              {challengeText && (
                 <div style={{
                   padding: '12px',
                   backgroundColor: '#f8fafc',
@@ -261,7 +277,7 @@ export default function ReconstructionStudio({
                     Consistency Challenge & Discrepancy Analysis
                   </div>
                   <p style={{ lineHeight: 1.5, color: 'var(--text-muted)' }}>
-                    {hypo.self_challenge_notes}
+                    {challengeText}
                   </p>
                 </div>
               )}

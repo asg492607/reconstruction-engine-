@@ -88,7 +88,8 @@ export default function EntityNetwork({ caseId, entities = [], onRefresh }) {
           </div>
         ) : (
           filteredEntities.map((entity) => {
-            const isConfirmed = entity.status === 'CONFIRMED';
+            const isConfirmed = entity.identity_status === 'CONFIRMED' || entity.status === 'CONFIRMED';
+            const entityLabel = entity.label || entity.name || 'Candidate Entity';
 
             return (
               <div 
@@ -105,7 +106,7 @@ export default function EntityNetwork({ caseId, entities = [], onRefresh }) {
                     {getEntityIcon(entity.entity_type)}
                     <div>
                       <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                        {entity.name}
+                        {entityLabel}
                       </h4>
                       <span className="badge badge-slate" style={{ fontSize: '0.68rem', marginTop: '2px' }}>
                         {entity.entity_type}
@@ -126,7 +127,7 @@ export default function EntityNetwork({ caseId, entities = [], onRefresh }) {
                   )}
                 </div>
 
-                {/* Attributes / Metadata */}
+                {/* Attributes / Description */}
                 <div style={{
                   fontSize: '0.78rem',
                   color: 'var(--text-muted)',
@@ -135,7 +136,17 @@ export default function EntityNetwork({ caseId, entities = [], onRefresh }) {
                   borderRadius: 'var(--radius-sm)',
                   marginBottom: '14px'
                 }}>
-                  {entity.attributes ? (
+                  {entity.description && Object.keys(entity.description).length > 0 ? (
+                    typeof entity.description === 'object' ? (
+                      Object.entries(entity.description).map(([k, v]) => (
+                        <div key={k} style={{ marginBottom: '2px' }}>
+                          <strong>{k}:</strong> {String(v)}
+                        </div>
+                      ))
+                    ) : (
+                      String(entity.description)
+                    )
+                  ) : entity.attributes ? (
                     typeof entity.attributes === 'object' ? (
                       Object.entries(entity.attributes).map(([k, v]) => (
                         <div key={k} style={{ marginBottom: '2px' }}>
@@ -146,7 +157,7 @@ export default function EntityNetwork({ caseId, entities = [], onRefresh }) {
                       String(entity.attributes)
                     )
                   ) : (
-                    'Observation cluster attributes'
+                    'Observation cluster telemetry'
                   )}
                 </div>
 

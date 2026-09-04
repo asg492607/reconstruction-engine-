@@ -96,80 +96,101 @@ export const api = {
   },
 
   evidence: {
-    list: async (caseId) => apiRequest(`/evidence/case/${caseId}`),
+    list: async (caseId) => apiRequest(`/cases/${caseId}/evidence`),
     upload: async (caseId, formData) => {
-      return apiRequest(`/evidence/upload?case_id=${caseId}`, {
+      return apiRequest(`/cases/${caseId}/evidence`, {
         method: "POST",
         body: formData
       });
     },
-    getProvenance: async (evidenceId) => apiRequest(`/evidence/${evidenceId}/provenance`)
+    getProvenance: async (caseId, evidenceId) => apiRequest(`/cases/${caseId}/evidence/${evidenceId}/provenance`)
   },
 
   observations: {
     list: async (caseId, department = null) => {
       const query = department ? `?department=${department}` : "";
-      return apiRequest(`/observations/case/${caseId}${query}`);
+      return apiRequest(`/cases/${caseId}/observations${query}`);
     }
   },
 
   entities: {
-    list: async (caseId) => apiRequest(`/entities/case/${caseId}`),
-    confirm: async (caseId, entityId) => apiRequest(`/entities/${entityId}/confirm`, {
-      method: "PATCH"
+    list: async (caseId) => apiRequest(`/cases/${caseId}/entities`),
+    confirm: async (caseId, entityId, linkId = null) => {
+      if (linkId) {
+        return apiRequest(`/cases/${caseId}/entities/${entityId}/links/${linkId}/confirm`, {
+          method: "POST"
+        });
+      }
+      return apiRequest(`/cases/${caseId}/entities/${entityId}/confirm`, {
+        method: "POST"
+      });
+    },
+    autoLink: async (caseId) => apiRequest(`/cases/${caseId}/entities/auto-link`, {
+      method: "POST"
     })
   },
 
   timelines: {
-    getCorrelated: async (caseId) => apiRequest(`/timelines/correlated/${caseId}`)
+    getCorrelated: async (caseId) => apiRequest(`/cases/${caseId}/timelines/correlated`),
+    getSources: async (caseId) => apiRequest(`/cases/${caseId}/timelines/sources`),
+    correlate: async (caseId) => apiRequest(`/cases/${caseId}/timelines/correlate`, {
+      method: "POST"
+    })
   },
 
   gapsConflicts: {
-    list: async (caseId) => apiRequest(`/gaps-conflicts/${caseId}`),
-    detect: async (caseId) => apiRequest(`/gaps-conflicts/${caseId}/detect`, {
+    list: async (caseId) => apiRequest(`/cases/${caseId}/gaps-conflicts`),
+    detect: async (caseId) => apiRequest(`/cases/${caseId}/gaps-conflicts/detect`, {
       method: "POST"
     })
   },
 
   findings: {
-    list: async (caseId) => apiRequest(`/findings/case/${caseId}`)
+    list: async (caseId, department = null) => {
+      const query = department ? `?department=${department}` : "";
+      return apiRequest(`/cases/${caseId}/findings${query}`);
+    },
+    claims: async (caseId) => apiRequest(`/cases/${caseId}/claims`)
   },
 
   reconstruction: {
-    list: async (caseId) => apiRequest(`/reconstruction/case/${caseId}`),
-    generate: async (caseId) => apiRequest(`/reconstruction/generate/${caseId}`, {
+    list: async (caseId) => apiRequest(`/cases/${caseId}/hypotheses`),
+    generate: async (caseId) => apiRequest(`/cases/${caseId}/hypotheses/generate`, {
       method: "POST"
+    }),
+    review: async (caseId, hypothesisId, payload) => apiRequest(`/cases/${caseId}/hypotheses/${hypothesisId}/review`, {
+      method: "POST",
+      body: JSON.stringify(payload)
     })
   },
 
   verification: {
-    list: async (caseId) => apiRequest(`/verification/case/${caseId}`),
-    verifyFinding: async (findingId, payload) => apiRequest(`/verification/finding/${findingId}`, {
+    listPending: async (caseId) => apiRequest(`/cases/${caseId}/verifications/pending`),
+    verifyObservation: async (caseId, obsId, payload) => apiRequest(`/cases/${caseId}/verifications/observations/${obsId}`, {
       method: "POST",
       body: JSON.stringify(payload)
     }),
-    submitHypothesis: async (caseId, payload) => apiRequest(`/verification/hypothesis/${caseId}`, {
+    verifyFinding: async (caseId, findingId, payload) => apiRequest(`/cases/${caseId}/verifications/findings/${findingId}`, {
       method: "POST",
       body: JSON.stringify(payload)
     })
   },
 
   copilot: {
-    ask: async (caseId, question, mode = "EVIDENCE_ONLY") => apiRequest("/copilot/ask", {
+    ask: async (caseId, question, mode = "EVIDENCE_ONLY") => apiRequest(`/cases/${caseId}/copilot/query`, {
       method: "POST",
       body: JSON.stringify({
-        case_id: caseId,
-        question,
+        query: question,
         mode
       })
     })
   },
 
   reports: {
-    generate: async (caseId, title = "Official Case Reconstruction Dossier") => apiRequest(`/reports/generate/${caseId}`, {
-      method: "POST",
-      body: JSON.stringify({ title })
+    generate: async (caseId, title = "Evidence Reconstruction Report") => apiRequest(`/cases/${caseId}/reports/generate`, {
+      method: "POST"
     }),
-    get: async (reportId) => apiRequest(`/reports/${reportId}`)
+    list: async (caseId) => apiRequest(`/cases/${caseId}/reports`),
+    get: async (caseId, reportId) => apiRequest(`/cases/${caseId}/reports/${reportId}`)
   }
 };
