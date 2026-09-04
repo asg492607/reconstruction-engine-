@@ -173,7 +173,7 @@ Run the full automated test suite:
 pytest -v
 ```
 
-All 17 suites pass with 100% coverage across auth, ABAC policy, evidence routing, timeline correlation, multi-hypothesis reconstruction, and judicial safeguards.
+All 17 automated integration and unit test suites pass, verifying end-to-end functionality across JWT & Firebase auth sync, ABAC policy enforcement, evidence routing, timeline correlation, multi-hypothesis reconstruction, and non-verdict safeguards.
 
 ---
 

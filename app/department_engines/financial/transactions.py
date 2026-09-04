@@ -43,17 +43,17 @@ class FinancialTransactionProcessor:
                 matching_purchases.append(tx)
 
         if len(matching_purchases) == 0:
-            # Missing purchase confirmed! Stolen item was taken without payment!
+            # Observation: No transaction record matched the discrepant item in the provided logs
             observations.append(
                 ObservationCreate(
                     evidence_id=evidence_id,
                     department=Department.FINANCIAL,
                     observation_type=ObservationType.TRANSACTION_FLAGGED,
                     raw_data={
-                        "anomaly_type": "UNAUTHORIZED_REMOVAL_NO_PAYMENT",
+                        "anomaly_type": "NO_MATCHING_TRANSACTION_RECORDED",
                         "total_transactions_analyzed": len(transactions),
                         "matching_valid_purchases": 0,
-                        "finding": "No purchase of stolen item was recorded in POS system during the incident window",
+                        "finding": "No matching purchase transaction was recorded in provided POS records during the incident window",
                         "audit_period": "Incident Time Window"
                     },
                     observed_time_raw="8:30 PM - 9:00 PM POS Transaction Log",
