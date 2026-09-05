@@ -103,14 +103,29 @@ def derive_hypothesis_strength(
     # 5. Observation quality
     rel_obs_confidences = [
         o.observation_confidence for o in observations 
-        if any(o.id in step.get("observation_ids", []) for step in sequence) and o.observation_confidence > 0
+        if any(o.id in step.get("observation_ids", []) for step in sequence) and o.observation_confidence is not None and o.observation_confidence > 0
     ]
     avg_conf = sum(rel_obs_confidences) / len(rel_obs_confidences) if rel_obs_confidences else 0.8
     if avg_conf >= 0.80:
         score += 1
 
+    # Check for exculpatory authorized stock adjustment
+    has_exculpatory_adj = any(
+        i.get("check") == "CHECK_EXCULPATORY_STOCK_ADJUSTMENT" for i in deterministic_issues
+    ) or any(
+        (o.raw_data or {}).get("anomaly_type") == "AUTHORIZED_STOCK_ADJUSTMENT_RECORDED" or
+        "authorized" in str((o.raw_data or {}).get("status", "")).lower() or
+        "authorized" in str((o.raw_data or {}).get("reason", "")).lower()
+        for o in observations
+    )
+    if has_exculpatory_adj:
+        score -= 8
+
     # Score mapping
-    if score >= 4 and contradictions_count == 0:
+    if has_exculpatory_adj:
+        strength = ClaimStrength.WEAK
+        rationale = "Derived WEAK strength: Missing inventory discrepancy is fully accounted for by authorized stock-adjustment record. Theft hypothesis cannot reach strong support."
+    elif score >= 4 and contradictions_count == 0:
         strength = ClaimStrength.STRONG
         rationale = f"Derived STRONG strength: High independent corroboration ({num_sources} sources across {len(departments)} departments) with strictly monotonic temporal timeline."
     elif score >= 2 and contradictions_count == 0:
@@ -163,6 +178,60 @@ async def generate_theft_hypotheses(db: AsyncSession, case: Case) -> List[Hypoth
     claim_ids = [c.id for c in claims]
     gap_dicts = [{"description": g.description, "type": g.gc_type.value} for g in gaps]
 
+    # 0. Check for Insufficient Evidence to formulate a defensible theft hypothesis
+    has_candidate_person = any(e.entity_type == EntityType.PERSON for e in entities) or any(
+        o.observation_type in (ObservationType.PERSON_DETECTED, ObservationType.ENTRY_EVENT) for o in obs
+    )
+    has_item_delta = any(o.observation_type == ObservationType.OBJECT_DETECTED for o in obs) or any(
+        "missing" in str(o.raw_data or {}).lower() or "-1" in str(o.raw_data or {}) for o in obs
+    )
+    has_scene_presence = any(
+        any(loc in (o.location_label or "").lower() for loc in ["aisle", "shelf", "counter", "display", "scene"]) or
+        o.observation_type in (ObservationType.PHYSICAL_MARK_DETECTED, ObservationType.MOVEMENT_DETECTED)
+        for o in obs
+    )
+
+    is_insufficient = (
+        len(obs) < 2 or
+        (not has_candidate_person and not has_scene_presence) or
+        (not has_item_delta and not has_scene_presence)
+    )
+
+    if is_insufficient:
+        insufficient_hyp = Hypothesis(
+            case_id=case.id,
+            label="Insufficient Evidence: Defensible Theft Hypothesis Cannot Be Established",
+            description=(
+                "Insufficient evidence to generate a defensible theft hypothesis. "
+                "Current evidentiary record lacks necessary spatial-temporal correlation, candidate identity, "
+                "or confirmed property loss. Reconstruction safely halted pending further evidentiary discovery."
+            ),
+            sequence=[],
+            supporting_claim_ids=claim_ids,
+            contradicting_claim_ids=[],
+            assumptions=["No verified candidate presence or property movement established."],
+            unknowns=[
+                "Identity of suspect unestablished",
+                "Direct observations of property removal absent",
+                "Evidentiary record insufficient for reconstruction"
+            ],
+            overall_strength=ClaimStrength.SPECULATIVE,
+            deterministic_issues=[{
+                "check": "CHECK_INSUFFICIENT_EVIDENCE",
+                "severity": "CRITICAL",
+                "message": "Evidentiary record fails minimum threshold for theft sequence generation (We don't know yet)."
+            }],
+            ai_challenge_notes=[{
+                "finding": "INSUFFICIENT_EVIDENCE",
+                "note": "Reconstruction safely halted: insufficient empirical grounding to construct a defensible sequence."
+            }],
+            status=HypothesisStatus.INSUFFICIENT_EVIDENCE
+        )
+        db.add(insufficient_hyp)
+        await db.commit()
+        await db.refresh(insufficient_hyp)
+        return [insufficient_hyp]
+
     # 1. Discover Primary Candidate Person Entity (default to P1 if present)
     p1_entity = next((e for e in entities if e.entity_type == EntityType.PERSON and e.label == "P1"), None)
     if not p1_entity:
@@ -203,7 +272,7 @@ async def generate_theft_hypotheses(db: AsyncSession, case: Case) -> List[Hypoth
 
     if not item_name and case.title:
         import re
-        m = re.search(r"(?:stolen|missing|theft of|item|product)\s*:?\s*([A-Za-z0-9\s\-]+?)(?:\.|\,|$|\n)", case.title, re.IGNORECASE)
+        m = re.search(r"(?:stolen|missing|theft of|grand larceny|larceny|robbery of|item|product)\s*:?\s*([A-Za-z0-9\s\-]+?)(?:\.|\,|$|\n)", case.title, re.IGNORECASE)
         if m:
             item_name = m.group(1).strip()
 
@@ -298,12 +367,57 @@ async def generate_theft_hypotheses(db: AsyncSession, case: Case) -> List[Hypoth
 
     # Check evidence quality degradation
     qualities = [o.evidence_quality for o in obs if o.evidence_quality]
-    has_degraded_quality = any(q in (EvidenceQuality.LOW, EvidenceQuality.POOR) for q in qualities)
+    has_degraded_quality = any(str(q.value if hasattr(q, "value") else q).upper() in ("LOW", "POOR") for q in qualities)
+
+    # Dynamic Department Stances
+    inv_obs = [o for o in obs if o.department == Department.INVESTIGATION]
+    for_obs = [o for o in obs if o.department == Department.FORENSIC]
+    fin_obs = [o for o in obs if o.department == Department.FINANCIAL]
+
+    # Investigation Stance
+    if any(o.observation_type in (ObservationType.ENTRY_EVENT, ObservationType.PERSON_DETECTED) for o in inv_obs):
+        inv_stance = f"Surveillance video corroborates {p1_label} presence near {shelf_loc}."
+    else:
+        inv_stance = f"Investigation records candidate {p1_label} presence within vicinity of premises."
+
+    # Forensic Stance: check if physical evidence links candidate to handling the item
+    has_forensic_toolmark = any(
+        "cut" in str(o.raw_data or {}).lower() or "toolmark" in str(o.raw_data or {}).lower() or
+        o.observation_type == ObservationType.PHYSICAL_MARK_DETECTED for o in for_obs
+    )
+    has_handling_dna_or_prints = any(
+        "positive" in str(o.raw_data or {}).lower() and "match" in str(o.raw_data or {}).lower()
+        for o in for_obs
+    )
+    if has_forensic_toolmark and not has_handling_dna_or_prints:
+        for_stance = f"Physical examination establishes mechanical tool cutting on security tether; latent prints unindividualized (handling by {p1_label} not physically confirmed)."
+    elif not for_obs or not has_handling_dna_or_prints:
+        for_stance = f"No physical, fingerprint, or toolmark evidence establishes that {p1_label} handled or detached the item."
+    else:
+        for_stance = f"Forensic analysis identifies physical trace evidence associated with {p1_label} on item or mount."
+
+    # Financial Stance: check for authorized stock adjustment or matching purchase
+    has_authorized_adj = any(
+        (o.raw_data or {}).get("anomaly_type") == "AUTHORIZED_STOCK_ADJUSTMENT_RECORDED" or
+        "authorized" in str((o.raw_data or {}).get("status", "")).lower() or
+        "authorized" in str((o.raw_data or {}).get("reason", "")).lower()
+        for o in obs
+    )
+    has_matching_purchase = any(
+        (o.raw_data or {}).get("anomaly_type") == "MATCHING_TRANSACTION_FOUND" for o in fin_obs
+    )
+
+    if has_authorized_adj:
+        fin_stance = f"Financial/inventory audit establishes authorized stock adjustment accounting for the missing item delta."
+    elif has_matching_purchase:
+        fin_stance = f"Point-of-sale audit confirms matching purchase transaction for {item_name}."
+    else:
+        fin_stance = f"Point-of-sale audit confirms zero matching purchase transactions for {item_name}."
 
     dept_stances = {
-        "INVESTIGATION": f"Surveillance video corroborates {p1_label} ingress, presence near {shelf_loc}, and egress.",
-        "FORENSIC": f"Physical examination establishes mechanical tool cutting on security tether; latent prints unindividualized.",
-        "FINANCIAL": f"Point-of-sale audit confirms zero matching purchase transactions for {item_name}."
+        "INVESTIGATION": inv_stance,
+        "FORENSIC": for_stance,
+        "FINANCIAL": fin_stance
     }
 
     step1_support = "MODERATE" if has_degraded_quality else "STRONG"
@@ -314,21 +428,35 @@ async def generate_theft_hypotheses(db: AsyncSession, case: Case) -> List[Hypoth
     )
 
     step2_support = "MODERATE"
-    step2_rationale = (
-        f"Subject {p1_label} proximity to {shelf_loc} corroborated by physical severed tether toolmark; "
-        "direct item detachment and concealment was not visually captured on camera (inferred from proximity and absence)."
-    )
+    if "no physical" in for_stance.lower() or "not physically confirmed" in for_stance.lower():
+        step2_rationale = (
+            f"Subject {p1_label} proximity to {shelf_loc} corroborated by surveillance; "
+            f"forensics establishes no physical evidence of {p1_label} handling the item. "
+            "Direct detachment remains physically unestablished."
+        )
+    else:
+        step2_rationale = (
+            f"Subject {p1_label} proximity to {shelf_loc} corroborated by physical severed tether toolmark; "
+            "direct item detachment and concealment was not visually captured on camera (inferred from proximity and absence)."
+        )
 
     step3_support = "UNCONFIRMED"
     step3_rationale = (
         f"Traversal through {corridor_loc.lower()}; zero direct surveillance coverage during this window."
     )
 
-    step4_support = "LIMITED"
-    step4_rationale = (
-        f"Subject {p1_label} egress directly recorded on camera without corresponding transaction; "
-        f"physical possession of {item_name} at departure is inferred from prior proximity and missing inventory delta."
-    )
+    if has_authorized_adj:
+        step4_support = "REFUTED"
+        step4_rationale = (
+            f"Missing inventory delta for {item_name} is accounted for by authorized stock adjustment / transfer log. "
+            "Absence of checkout transaction does not represent theft."
+        )
+    else:
+        step4_support = "LIMITED"
+        step4_rationale = (
+            f"Subject {p1_label} egress directly recorded on camera without corresponding transaction; "
+            f"physical possession of {item_name} at departure is inferred from prior proximity and missing inventory delta."
+        )
 
     hypotheses = []
 
@@ -402,6 +530,14 @@ async def generate_theft_hypotheses(db: AsyncSession, case: Case) -> List[Hypoth
         p1_sequence, list(links), list(obs), list(claims),
         supporting_claim_ids=claim_ids, candidate_entities=list(entities)
     )
+
+    if has_authorized_adj:
+        layer1_a.append({
+            "check": "CHECK_EXCULPATORY_STOCK_ADJUSTMENT",
+            "severity": "CRITICAL",
+            "message": "Missing inventory discrepancy is fully explained by authorized stock adjustment. Theft hypothesis cannot reach strong support."
+        })
+
     layer2_a = await run_layer2_ai_adversarial_review("Hypothesis A", p1_sequence, layer1_a, gap_dicts)
 
     unknowns_a = ["Visual confirmation of item concealment during surveillance coverage gap."]
@@ -421,14 +557,28 @@ async def generate_theft_hypotheses(db: AsyncSession, case: Case) -> List[Hypoth
         is_speculative_branch=False
     )
 
-    hyp_a = Hypothesis(
-        case_id=case.id,
-        label=f"Hypothesis A: Sole Actor Concealment ({p1_label})",
-        description=(
+    if has_authorized_adj:
+        hyp_a_desc = (
+            f"Uncorroborated theft allegation: although candidate {p1_label} was observed near {shelf_loc}, "
+            f"inventory audit confirms an authorized stock adjustment explaining the missing {item_name}. "
+            "Theft cannot be defensibly asserted."
+        )
+    elif "no physical" in for_stance.lower() or "not physically confirmed" in for_stance.lower():
+        hyp_a_desc = (
+            f"Candidate {p1_label} is strongly associated with presence near the incident area ({shelf_loc}), "
+            f"but direct handling of the stolen item ({item_name}) remains unestablished."
+        )
+    else:
+        hyp_a_desc = (
             f"Candidate Entity {p1_label} entered via {entry_loc}, was present at {shelf_loc} "
             f"during incident window, traversed {corridor_loc}, and exited via {exit_loc} "
             f"with {item_name} without authorized transaction record."
-        ),
+        )
+
+    hyp_a = Hypothesis(
+        case_id=case.id,
+        label=f"Hypothesis A: Sole Actor Concealment ({p1_label})",
+        description=hyp_a_desc,
         sequence=p1_sequence,
         supporting_claim_ids=claim_ids,
         contradicting_claim_ids=[],
@@ -437,7 +587,7 @@ async def generate_theft_hypotheses(db: AsyncSession, case: Case) -> List[Hypoth
         overall_strength=strength_a,
         deterministic_issues=layer1_a,
         ai_challenge_notes=layer2_a,
-        status=HypothesisStatus.DRAFT
+        status=HypothesisStatus.CHALLENGED if has_authorized_adj else HypothesisStatus.DRAFT
     )
     db.add(hyp_a)
     hypotheses.append(hyp_a)
@@ -545,8 +695,26 @@ async def generate_theft_hypotheses(db: AsyncSession, case: Case) -> List[Hypoth
         ai_challenge_notes=layer2_b,
         status=HypothesisStatus.DRAFT
     )
-    db.add(hyp_b)
     hypotheses.append(hyp_b)
+    from app.reconstruction.integrity_gate import validate_evidence_reference_integrity
+    for h in hypotheses:
+        is_valid, violations = validate_evidence_reference_integrity(
+            case_evidence_list=evidence_items,
+            payload={
+                "label": h.label,
+                "description": h.description,
+                "sequence": h.sequence,
+                "assumptions": h.assumptions,
+                "unknowns": h.unknowns
+            },
+            context_desc=f"Hypothesis {h.label}"
+        )
+        if not is_valid:
+            # Reject output completely: do not sanitize, prevent reaching verified status
+            h.status = HypothesisStatus.REJECTED
+            h.review_note = f"UNSUPPORTED_EVIDENCE_REFERENCE: {'; '.join(violations)}"
+            h.overall_strength = ClaimStrength.SPECULATIVE
+        db.add(h)
 
     await db.commit()
     for h in hypotheses:

@@ -267,9 +267,49 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
               className="btn btn-primary"
               style={{ width: '100%', padding: '11px' }}
             >
-              {loading ? "Authenticating..." : "Sign In with Firebase"}
+              {loading ? "Authenticating..." : "Sign In to RRE"}
               <LogIn size={16} />
             </button>
+
+            <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-light)' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Quick Demo Access (1-Click Fill):
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px' }}>
+                <button
+                  type="button"
+                  onClick={() => { setEmail('lead@police.gov'); setPassword('leadpass123'); }}
+                  className="btn btn-secondary btn-sm"
+                  style={{ fontSize: '0.75rem', justifyContent: 'flex-start', padding: '6px 8px' }}
+                >
+                  🔵 Lead Investigator
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setEmail('forensic@police.gov'); setPassword('forensicpass123'); }}
+                  className="btn btn-secondary btn-sm"
+                  style={{ fontSize: '0.75rem', justifyContent: 'flex-start', padding: '6px 8px' }}
+                >
+                  🟣 Forensic Officer
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setEmail('financial@police.gov'); setPassword('finpass123'); }}
+                  className="btn btn-secondary btn-sm"
+                  style={{ fontSize: '0.75rem', justifyContent: 'flex-start', padding: '6px 8px' }}
+                >
+                  🟡 Financial Analyst
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setEmail('legal@police.gov'); setPassword('legalpass123'); }}
+                  className="btn btn-secondary btn-sm"
+                  style={{ fontSize: '0.75rem', justifyContent: 'flex-start', padding: '6px 8px' }}
+                >
+                  🟢 Legal Reviewer
+                </button>
+              </div>
+            </div>
           </form>
         )}
 
@@ -343,8 +383,8 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
                 >
                   <option value="LEAD_INVESTIGATOR">Lead Investigator</option>
                   <option value="INVESTIGATOR">Field Investigator</option>
-                  <option value="FORENSIC_SPECIALIST">Forensic Specialist</option>
-                  <option value="FINANCIAL_AUDITOR">Financial Analyst</option>
+                  <option value="FORENSIC_OFFICER">Forensic Specialist</option>
+                  <option value="FINANCIAL_ANALYST">Financial Analyst</option>
                   <option value="PROSECUTOR_JUDGE">External Legal Reviewer</option>
                   <option value="ADMIN">System Admin</option>
                 </select>
@@ -361,10 +401,10 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
                   style={{ fontSize: '0.82rem' }}
                 >
                   <option value="INVESTIGATION">Investigation</option>
-                  <option value="FORENSICS">Forensics</option>
-                  <option value="CYBER">Cyber & Digital</option>
+                  <option value="FORENSIC">Forensics</option>
                   <option value="FINANCIAL">Financial Crimes</option>
                   <option value="LEGAL">Legal & Judicial</option>
+                  <option value="ADMIN">System Administration</option>
                 </select>
               </div>
             </div>

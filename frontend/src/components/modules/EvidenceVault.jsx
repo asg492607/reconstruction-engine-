@@ -32,9 +32,12 @@ export default function EvidenceVault({ caseId, evidence = [], onRefresh }) {
   const [uploadError, setUploadError] = useState(null);
 
   const filteredEvidence = evidence.filter(item => {
-    const matchesSearch = item.title.toLowerCase().includes(search.toLowerCase()) || 
-                          (item.description && item.description.toLowerCase().includes(search.toLowerCase()));
-    const matchesDept = filterDept === 'ALL' || item.department === filterDept;
+    const itemTitle = item.title || item.original_filename || '';
+    const itemDesc = item.description || item.classification_notes || '';
+    const matchesSearch = itemTitle.toLowerCase().includes((search || '').toLowerCase()) || 
+                          itemDesc.toLowerCase().includes((search || '').toLowerCase());
+    const depts = item.authorized_departments || (item.department ? [item.department] : []);
+    const matchesDept = filterDept === 'ALL' || item.department === filterDept || depts.includes(filterDept);
     return matchesSearch && matchesDept;
   });
 
@@ -73,6 +76,7 @@ export default function EvidenceVault({ caseId, evidence = [], onRefresh }) {
   const getSourceIcon = (type) => {
     switch(type) {
       case 'IMAGE': return <Image size={16} color="var(--primary)" />;
+      case 'CCTV':
       case 'VIDEO_CCTV': return <Video size={16} color="#7c3aed" />;
       default: return <FileText size={16} color="var(--text-muted)" />;
     }
@@ -148,26 +152,30 @@ export default function EvidenceVault({ caseId, evidence = [], onRefresh }) {
                   <tr key={item.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
                     <td style={{ padding: '12px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
-                        {getSourceIcon(item.source_type)}
-                        <span>{item.title}</span>
+                        {getSourceIcon(item.evidence_type || item.source_type)}
+                        <span>{item.title || item.original_filename || 'Evidence Item'}</span>
                       </div>
-                      {item.description && (
+                      {(item.description || item.classification_notes) && (
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px', paddingLeft: '24px' }}>
-                          {item.description}
+                          {item.description || item.classification_notes}
                         </div>
                       )}
                     </td>
                     <td style={{ padding: '12px' }}>
-                      <span className="badge badge-slate">{item.source_type}</span>
+                      <span className="badge badge-slate">{item.evidence_type || item.source_type || 'ARTIFACT'}</span>
                     </td>
                     <td style={{ padding: '12px' }}>
-                      <span className="badge badge-blue">{item.department}</span>
+                      <span className="badge badge-blue">
+                        {(item.authorized_departments && item.authorized_departments.length > 0)
+                          ? item.authorized_departments.join(', ')
+                          : (item.department || 'GENERAL')}
+                      </span>
                     </td>
                     <td style={{ padding: '12px', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                       {item.sha256_hash ? `${item.sha256_hash.substring(0, 14)}...` : 'CALCULATING'}
                     </td>
                     <td style={{ padding: '12px', color: 'var(--text-muted)' }}>
-                      {item.custody_officer || 'Evidence Vault'}
+                      {item.uploaded_by || item.custody_officer || 'Evidence Custodian'}
                     </td>
                     <td style={{ padding: '12px' }}>
                       <button 
@@ -370,7 +378,7 @@ export default function EvidenceVault({ caseId, evidence = [], onRefresh }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', fontSize: '0.85rem' }}>
               <div>
                 <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 600 }}>ARTIFACT NAME</span>
-                <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-main)' }}>{selectedItem.title}</div>
+                <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-main)' }}>{selectedItem.title || selectedItem.original_filename || 'Evidence Artifact'}</div>
               </div>
 
               <div style={{
@@ -389,11 +397,15 @@ export default function EvidenceVault({ caseId, evidence = [], onRefresh }) {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
                   <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 600 }}>DEPARTMENT</span>
-                  <div style={{ fontWeight: 600 }}>{selectedItem.department}</div>
+                  <div style={{ fontWeight: 600 }}>
+                    {(selectedItem.authorized_departments && selectedItem.authorized_departments.length > 0)
+                      ? selectedItem.authorized_departments.join(', ')
+                      : (selectedItem.department || 'GENERAL')}
+                  </div>
                 </div>
                 <div>
                   <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 600 }}>CUSTODIAN</span>
-                  <div style={{ fontWeight: 600 }}>{selectedItem.custody_officer || 'Harris (Lead)'}</div>
+                  <div style={{ fontWeight: 600 }}>{selectedItem.uploaded_by || selectedItem.custody_officer || 'Evidence Vault Custodian'}</div>
                 </div>
               </div>
 

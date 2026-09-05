@@ -10,7 +10,8 @@ from app.models.enums import (
     Role, Department, CaseType, CaseStatus, EvidenceType, ProcessingStatus,
     ObservationType, TimeConfidence, TimeReliability, EvidenceQuality,
     VerificationStatus, EntityType, IdentityStatus, GeneratedBy, ClaimStrength,
-    HypothesisStatus, GapConflictType, Significance, TargetType, VerificationAction
+    HypothesisStatus, GapConflictType, Significance, TargetType, VerificationAction,
+    OffenseCategory, SpecificOffense, SufficiencyRating
 )
 
 def utc_now() -> datetime:
@@ -54,6 +55,10 @@ class Case(Base):
     case_number: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     case_type: Mapped[CaseType] = mapped_column(SAEnum(CaseType, native_enum=False), default=CaseType.THEFT, nullable=False)
+    offense_category: Mapped[Optional[OffenseCategory]] = mapped_column(SAEnum(OffenseCategory, native_enum=False), nullable=True)
+    specific_offense: Mapped[Optional[SpecificOffense]] = mapped_column(SAEnum(SpecificOffense, native_enum=False), nullable=True)
+    incident_context: Mapped[Optional[dict]] = mapped_column(JSON, default=dict) # target_type, premises, etc.
+    investigative_objectives: Mapped[Optional[list]] = mapped_column(JSON, default=list) # e.g. ["identify_person", "trace_inventory"]
     status: Mapped[CaseStatus] = mapped_column(SAEnum(CaseStatus, native_enum=False), default=CaseStatus.CREATED, nullable=False)
     incident_location: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     incident_time_observed: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -63,6 +68,7 @@ class Case(Base):
     current_version: Mapped[int] = mapped_column(Integer, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
 
     organization: Mapped[Optional["Organization"]] = relationship("Organization", back_populates="cases")
     evidence_items: Mapped[List["Evidence"]] = relationship("Evidence", back_populates="case", cascade="all, delete-orphan")

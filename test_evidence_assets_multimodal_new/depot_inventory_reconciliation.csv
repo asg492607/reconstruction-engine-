@@ -1,0 +1,6 @@
+sku,product_name,category,expected_stock_count,physical_count,unit_cost_usd,location_bin
+SKU-OPT-100,100G Optical Transceiver Modules,TELECOM_HARDWARE,60,60,450.00,BIN-C-01
+SKU-CAT-809,Industrial Platinum Catalyst Cylinders,PRECIOUS_MATERIALS,4,2,18500.00,BIN-C-VAULT-04
+SKU-NVME-400,High-Density 32TB NVMe Server Drives,ENTERPRISE_STORAGE,24,24,890.00,BIN-C-02
+SKU-SFP-28,25G SFP28 Direct Attach Copper Cable,CABLES_ACCESSORIES,150,150,35.00,BIN-C-03
+SKU-PSU-1600,1600W Titanium Server Power Supply,POWER_INFRASTRUCTURE,18,18,320.00,BIN-C-05

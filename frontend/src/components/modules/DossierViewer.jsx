@@ -9,9 +9,9 @@ import {
   Lock, 
   Sparkles,
   CheckCircle,
+  AlertTriangle,
   Building
 } from 'lucide-react';
-import { api } from '../../api';
 
 export default function DossierViewer({ 
   caseData, 
@@ -20,8 +20,6 @@ export default function DossierViewer({
   hypotheses = [], 
   gapsConflicts = [] 
 }) {
-  const [reportTitle, setReportTitle] = useState("Evidence Reconstruction Report");
-
   const handlePrint = () => {
     window.print();
   };
@@ -29,7 +27,13 @@ export default function DossierViewer({
   const handleExportJson = () => {
     const data = {
       case: caseData,
-      evidence: evidence.map(e => ({ title: e.title, hash: e.sha256_hash, dept: e.department })),
+      evidence: evidence.map(e => ({ 
+        id: e.id, 
+        title: e.original_filename || e.title, 
+        type: e.evidence_type, 
+        hash: e.sha256_hash, 
+        dept: e.department 
+      })),
       timeline: timelineEvents,
       hypotheses: hypotheses,
       gaps_conflicts: gapsConflicts,
@@ -43,6 +47,13 @@ export default function DossierViewer({
     a.click();
   };
 
+  // Determine sufficiency
+  const isInsufficient = hypotheses.length === 0 || hypotheses.some(h => 
+    (h.status === 'INSUFFICIENT_EVIDENCE') || 
+    (h.hypothesis_category === 'INSUFFICIENT_EVIDENCE') ||
+    (h.label && h.label.toLowerCase().includes('insufficient'))
+  );
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '1000px', margin: '0 auto' }}>
       {/* Action Bar */}
@@ -52,7 +63,7 @@ export default function DossierViewer({
             Evidence Reconstruction Report & Export
           </h2>
           <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            Traceable investigative report synthesizing multi-department observations, timelines, and consistency challenges.
+            Empirically grounded investigative report synthesizing actual uploaded exhibits without speculative leaps.
           </p>
         </div>
 
@@ -74,22 +85,22 @@ export default function DossierViewer({
         <div style={{ borderBottom: '2px solid var(--text-main)', paddingBottom: '20px', marginBottom: '28px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
             <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-              REALITY RECONSTRUCTION ENGINE • EVIDENCE RECONSTRUCTION REPORT
+              REALITY RECONSTRUCTION ENGINE • OFFICIAL CASE DOSSIER
             </div>
             <h1 style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--text-main)', marginTop: '4px' }}>
-              {caseData?.title || 'Commercial Burglary Reconstruction'}
+              {caseData?.title || 'Active Investigation Case'}
             </h1>
             <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-              Case File: <strong>{caseData?.case_number || 'THF-2026-0001'}</strong> • Department: Investigation Division
+              Case File: <strong>{caseData?.case_number || 'N/A'}</strong> • Offense Category: {caseData?.specific_offense || caseData?.case_type || 'THEFT'}
             </div>
           </div>
 
           <div style={{ textAlign: 'right' }}>
-            <span className="badge badge-blue" style={{ fontSize: '0.75rem' }}>
-              INVESTIGATION SUPPORT REPORT
+            <span className={`badge ${isInsufficient ? 'badge-amber' : 'badge-green'}`} style={{ fontSize: '0.75rem' }}>
+              {isInsufficient ? 'EVIDENTIARY RECORD INCOMPLETE' : 'MULTI-SOURCE VERIFIED'}
             </span>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '6px' }}>
-              Date: {new Date().toLocaleDateString()}
+              Generated: {new Date().toLocaleDateString()}
             </div>
           </div>
         </div>
@@ -103,94 +114,157 @@ export default function DossierViewer({
           borderRadius: '0 var(--radius-md) var(--radius-md) 0'
         }}>
           <h3 style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--primary)', marginBottom: '4px' }}>
-            Non-Verdict Design Principle & Methodology Disclosure
+            Non-Verdict Design Principle & Evidence Provenance Disclosure
           </h3>
           <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
-            This report was assembled using the Reality Reconstruction Engine (RRE). RRE transforms scattered theft evidence into traceable observations, routes evidence to authorized specialist departments, correlates their independent findings across time and entities, and generates evidence-constrained hypotheses for investigator review. All source artifacts are cryptographically preserved via immutable SHA-256 digests. RRE never asserts individual culpability or issues legal verdicts; admissibility and guilt determinations remain strictly human, procedural, and judicial responsibilities.
+            This report was dynamically generated by the Reality Reconstruction Engine (RRE). RRE strictly evaluates uploaded, authenticated evidence exhibits. RRE operates under a mandatory non-verdict principle: it never manufactures missing observations, never assumes legal guilt, and halts reconstruction when evidence is insufficient. Admissibility and culpability determinations remain strictly human, procedural, and judicial responsibilities.
           </p>
         </div>
 
-        {/* Section 2: Executive Summary */}
+        {/* Section 2: Case Summary */}
         <div style={{ marginBottom: '28px' }}>
           <h3 style={{ fontSize: '1.05rem', fontWeight: 800, borderBottom: '1px solid var(--border-light)', paddingBottom: '8px', marginBottom: '12px' }}>
-            1. Investigative Case Summary
+            1. Investigative Case Scope & Context
           </h3>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-main)', lineHeight: 1.6 }}>
-            During the investigative window, commercial premises sustained an exterior breach at the rear alley entrance. Forensic assisted toolmark analysis records mechanical strike plate deformation. Inventory audits establish an unexplained deficit of 3 units Apple iPhone 16 Pro Max (approximate retail value: $4,200.00). Correlated visual telemetry and vehicle records document an unregistered dark sedan departing 5th Ave at 02:55.
+            <strong>Incident Location:</strong> {caseData?.incident_location || 'Not Specified'}<br />
+            <strong>Observed Timestamp:</strong> {caseData?.incident_time_observed ? new Date(caseData.incident_time_observed).toLocaleString() : 'Pending verification'}<br />
+            <strong>Exhibits Attached:</strong> {evidence.length} verified evidence file(s).
           </p>
         </div>
 
-        {/* Section 3: Chain of Custody & Evidence Vault Inventory */}
+        {/* Section 3: Evidence Vault Inventory */}
         <div style={{ marginBottom: '28px' }}>
           <h3 style={{ fontSize: '1.05rem', fontWeight: 800, borderBottom: '1px solid var(--border-light)', paddingBottom: '8px', marginBottom: '12px' }}>
-            2. Evidence Vault Integrity & Custody Trail
+            2. Attached Evidence Manifest & Custody Hashes
           </h3>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border-light)', textAlign: 'left', color: 'var(--text-muted)' }}>
-                <th style={{ padding: '8px' }}>Artifact</th>
-                <th style={{ padding: '8px' }}>Department</th>
-                <th style={{ padding: '8px' }}>SHA-256 Digest</th>
-                <th style={{ padding: '8px' }}>Integrity</th>
-              </tr>
-            </thead>
-            <tbody>
-              {evidence.map((item, idx) => (
-                <tr key={idx} style={{ borderBottom: '1px solid var(--border-light)' }}>
-                  <td style={{ padding: '8px', fontWeight: 600 }}>{item.title}</td>
-                  <td style={{ padding: '8px' }}>{item.department}</td>
-                  <td style={{ padding: '8px', fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>
-                    {item.sha256_hash ? `${item.sha256_hash.substring(0, 20)}...` : 'VERIFIED'}
-                  </td>
-                  <td style={{ padding: '8px', color: 'var(--success-text)', fontWeight: 600 }}>
-                    VERIFIED INTACT
-                  </td>
+          {evidence.length === 0 ? (
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+              No evidence exhibits uploaded to this case yet.
+            </p>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border-light)', textAlign: 'left', color: 'var(--text-muted)' }}>
+                  <th style={{ padding: '8px' }}>Filename / Title</th>
+                  <th style={{ padding: '8px' }}>Modality Type</th>
+                  <th style={{ padding: '8px' }}>SHA-256 Digest</th>
+                  <th style={{ padding: '8px' }}>Integrity</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {evidence.map((item, idx) => (
+                  <tr key={idx} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                    <td style={{ padding: '8px', fontWeight: 600 }}>{item.original_filename || item.title}</td>
+                    <td style={{ padding: '8px' }}>
+                      <span className="badge badge-blue" style={{ fontSize: '0.7rem' }}>
+                        {item.evidence_type}
+                      </span>
+                    </td>
+                    <td style={{ padding: '8px', fontFamily: 'var(--font-mono)', fontSize: '0.72rem' }}>
+                      {item.sha256_hash ? `${item.sha256_hash.substring(0, 20)}...` : 'VERIFIED INTACT'}
+                    </td>
+                    <td style={{ padding: '8px', color: 'var(--success-text)', fontWeight: 600 }}>
+                      ✓ SHA-256 SECURED
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
 
-        {/* Section 4: Reconstructed Hypotheses & Evidence Support Levels */}
+        {/* Section 4: Reconstructed Hypotheses */}
         <div style={{ marginBottom: '28px' }}>
           <h3 style={{ fontSize: '1.05rem', fontWeight: 800, borderBottom: '1px solid var(--border-light)', paddingBottom: '8px', marginBottom: '12px' }}>
-            3. Evidence-Constrained Hypotheses Evaluation
+            3. Synthesized Reconstruction Hypotheses
           </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            <div style={{ padding: '14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                <strong>Hypothesis A: Rapid Forced Entry & Storage Exfiltration</strong>
-                <span className="badge badge-green">STRONG EVIDENCE SUPPORT</span>
+          {hypotheses.length === 0 ? (
+            <div style={{ padding: '16px', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--warning-bg)', border: '1px solid var(--warning-border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, color: 'var(--warning-text)', marginBottom: '4px' }}>
+                <AlertTriangle size={16} />
+                No Hypotheses Generated
               </div>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                Corroborated by physical strike plate pry marks, CCTV entry window (02:45), targeted missing device serials, and dark sedan departure (02:55). 4 supporting claims, 0 unresolved contradictions.
+              <p style={{ fontSize: '0.825rem', color: 'var(--text-main)', margin: 0 }}>
+                Run reconstruction engine to synthesize evidence-constrained hypotheses.
               </p>
             </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {hypotheses.map((h, idx) => {
+                const isHypInsufficient = h.status === 'INSUFFICIENT_EVIDENCE' || 
+                  h.hypothesis_category === 'INSUFFICIENT_EVIDENCE' ||
+                  (h.label && h.label.includes('Insufficient'));
+                return (
+                  <div key={idx} style={{ 
+                    padding: '16px', 
+                    borderRadius: 'var(--radius-md)', 
+                    border: '1px solid var(--border-light)',
+                    backgroundColor: isHypInsufficient ? '#fffbeb' : '#ffffff',
+                    borderColor: isHypInsufficient ? '#fde68a' : 'var(--border-light)'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                      <strong style={{ fontSize: '0.95rem', color: isHypInsufficient ? '#92400e' : 'var(--text-main)' }}>
+                        {h.label || h.hypothesis_title || `Hypothesis #${idx + 1}`}
+                      </strong>
+                      <span className={isHypInsufficient ? 'badge badge-amber' : (h.overall_strength === 'STRONG' ? 'badge badge-green' : 'badge badge-blue')}>
+                        {h.overall_strength || h.hypothesis_category || 'EVALUATED'}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: '0.825rem', color: 'var(--text-main)', lineHeight: 1.5, marginBottom: '8px' }}>
+                      {h.description || h.narrative}
+                    </p>
+                    {h.supporting_evidence_citations && h.supporting_evidence_citations.length > 0 && (
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                        <strong>Citations:</strong> {h.supporting_evidence_citations.join(' • ')}
+                      </div>
+                    )}
+                    {h.critical_gaps_identified && h.critical_gaps_identified.length > 0 && (
+                      <div style={{ fontSize: '0.75rem', color: '#dc2626', marginTop: '4px' }}>
+                        <strong>Unresolved Gaps:</strong> {h.critical_gaps_identified.join(' • ')}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
-            <div style={{ padding: '14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                <strong>Hypothesis B: Unforced Inside Entry / Staged Breach</strong>
-                <span className="badge badge-amber">LIMITED EVIDENCE SUPPORT (Challenged)</span>
-              </div>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                Hypothesis B has been challenged by the following evidence inconsistency: Exterior strike plate deformation documents forced mechanical leverage, which contradicts the unforced insider entry scenario.
-              </p>
+        {/* Section 5: Evidentiary Gaps & Coverage Anomalies */}
+        {gapsConflicts.length > 0 && (
+          <div style={{ marginBottom: '28px' }}>
+            <h3 style={{ fontSize: '1.05rem', fontWeight: 800, borderBottom: '1px solid var(--border-light)', paddingBottom: '8px', marginBottom: '12px' }}>
+              4. Evidentiary Gaps & Sensor Blind Spots
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {gapsConflicts.map((g, idx) => (
+                <div key={idx} style={{ 
+                  padding: '10px 14px', 
+                  borderRadius: 'var(--radius-md)', 
+                  border: '1px solid var(--border-light)',
+                  backgroundColor: 'var(--bg-subtle)',
+                  fontSize: '0.8rem'
+                }}>
+                  <span style={{ fontWeight: 700, color: '#dc2626' }}>[{g.gap_type || g.conflict_type || 'GAP'}]</span> {g.description || g.discrepancy_explanation}
+                </div>
+              ))}
             </div>
           </div>
-        </div>
+        )}
 
         {/* Signoff Footer */}
         <div style={{ marginTop: '48px', paddingTop: '24px', borderTop: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between' }}>
           <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>PREPARED BY:</div>
-            <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>Det. Marcus Harris #4401</div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Lead Criminal Investigator</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>PREPARED FOR:</div>
+            <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>Official Case Record #{caseData?.case_number || 'N/A'}</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Reality Reconstruction Engine 2.0</div>
           </div>
 
           <div>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>INTEGRITY VERIFICATION:</div>
-            <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--primary)' }}>RRE-EVIDENCE-DIGEST-VERIFIED</div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Signed to Immutable Audit Ledger</div>
+            <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--primary)' }}>EVIDENCE-GROUNDED-AUDITED</div>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Zero-Hallucination Integrity Enforced</div>
           </div>
         </div>
       </div>

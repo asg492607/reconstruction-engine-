@@ -12,7 +12,8 @@ import {
   X,
   Briefcase,
   ChevronDown,
-  Database
+  Database,
+  Plus
 } from 'lucide-react';
 
 export default function Navbar({ 
@@ -22,28 +23,33 @@ export default function Navbar({
   setActiveTab, 
   cases = [], 
   activeCase, 
-  onSelectCase 
+  onSelectCase,
+  onNewCase
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const navItems = [
     { id: 'overview', label: 'Dashboard', icon: Layers },
+    { id: 'plan', label: 'Analysis Plan', icon: Cpu },
     { id: 'evidence', label: 'Evidence Vault', icon: Database },
     { id: 'timeline', label: 'Timeline', icon: Layers },
     { id: 'reconstruction', label: 'Reconstruction', icon: GitBranch },
     { id: 'gaps', label: 'Gaps & Conflicts', icon: AlertTriangle },
     { id: 'entities', label: 'Entities', icon: Users },
     { id: 'copilot', label: 'AI Copilot', icon: Cpu },
-    { id: 'dossier', label: 'Evidence Report', icon: FileText },
+    { id: 'output', label: 'Reconstruction Dossier', icon: FileText },
   ];
 
   const getRoleBadgeClass = (role) => {
     switch(role) {
       case 'LEAD_INVESTIGATOR': return 'badge-blue';
+      case 'FORENSIC_OFFICER':
       case 'FORENSIC_SPECIALIST': return 'badge-purple';
+      case 'FINANCIAL_ANALYST':
       case 'FINANCIAL_AUDITOR': return 'badge-amber';
       case 'LEGAL_REVIEWER':
       case 'PROSECUTOR_JUDGE': return 'badge-green';
+      case 'ADMIN': return 'badge-rose';
       default: return 'badge-slate';
     }
   };
@@ -80,9 +86,9 @@ export default function Navbar({
             </div>
           </div>
 
-          {/* Case Dropdown */}
-          {cases.length > 0 && (
-            <div style={{ display: 'none', mdDisplay: 'flex', alignItems: 'center' }}>
+          {/* Case Dropdown & New Case Button */}
+          <div style={{ display: 'none', mdDisplay: 'flex', alignItems: 'center', gap: '8px' }}>
+            {cases.length > 0 && (
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -115,15 +121,38 @@ export default function Navbar({
                   ))}
                 </select>
               </div>
-            </div>
-          )}
+            )}
+
+            {onNewCase && (
+              <button
+                onClick={onNewCase}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  backgroundColor: 'var(--primary)',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '6px 12px',
+                  borderRadius: 'var(--radius-md)',
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 4px rgba(37, 99, 235, 0.2)'
+                }}
+              >
+                <Plus size={14} />
+                New Case
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Center: Desktop Nav Tabs */}
         <nav style={{ display: 'none', lgDisplay: 'flex', alignItems: 'center', gap: '4px' }}>
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = activeTab === item.id;
+            const isActive = activeTab === item.id || (item.id === 'output' && activeTab === 'dossier');
             return (
               <button
                 key={item.id}
@@ -234,7 +263,7 @@ export default function Navbar({
           </div>
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = activeTab === item.id;
+            const isActive = activeTab === item.id || (item.id === 'output' && activeTab === 'dossier');
             return (
               <button
                 key={item.id}

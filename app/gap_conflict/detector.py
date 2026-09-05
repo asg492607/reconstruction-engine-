@@ -60,8 +60,26 @@ async def detect_case_gaps_and_conflicts(
         (o.raw_data or {}).get("anomaly_type") in ("UNAUTHORIZED_REMOVAL_NO_PAYMENT", "NO_MATCHING_TRANSACTION_RECORDED")
         for o in observations
     )
+    has_authorized_adj = any(
+        (o.raw_data or {}).get("anomaly_type") == "AUTHORIZED_STOCK_ADJUSTMENT_RECORDED" or
+        "authorized" in str((o.raw_data or {}).get("status", "")).lower() or
+        "authorized" in str((o.raw_data or {}).get("reason", "")).lower()
+        for o in observations
+    )
 
-    if inventory_missing and has_unauthorized_tx:
+    if has_authorized_adj:
+        adj_discrepancy = GapConflict(
+            case_id=case.id,
+            gc_type=GapConflictType.CORROBORATIVE_DISCREPANCY,
+            description="Inventory delta is accounted for by authorized stock adjustment / transfer log. Theft hypothesis refuted by legitimate business record.",
+            significance=Significance.HIGH,
+            significance_reason="Exculpatory financial finding: Missing stock count is fully resolved by authorized administrative adjustment, eliminating theft basis.",
+            is_resolved=True,
+            resolution_note="Exculpatory audit match confirms authorized write-off/transfer."
+        )
+        db.add(adj_discrepancy)
+        detected.append(adj_discrepancy)
+    elif inventory_missing and has_unauthorized_tx:
         corr_discrepancy = GapConflict(
             case_id=case.id,
             gc_type=GapConflictType.CORROBORATIVE_DISCREPANCY,
@@ -77,8 +95,9 @@ async def detect_case_gaps_and_conflicts(
     clothing_descriptors = set()
     for o in observations:
         attrs = (o.raw_data or {}).get("attributes") or {}
-        if "clothing" in attrs:
-            clothing_descriptors.add(str(attrs["clothing"]).strip())
+        clothing = (o.raw_data or {}).get("clothing") or attrs.get("clothing")
+        if clothing and clothing != "Unspecified clothing":
+            clothing_descriptors.add(str(clothing).strip())
     
     # Conflict between light and dark attire or mutually exclusive colors
     has_dark = any("dark" in c.lower() or "black" in c.lower() for c in clothing_descriptors)

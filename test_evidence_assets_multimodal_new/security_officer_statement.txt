@@ -1,0 +1,17 @@
+SECURITY OFFICER FIRSTHAND OBSERVATION REPORT
+INCIDENT ID: SEC-2026-0842
+LOCATION: Apex Logistics Depot #7, Sector B
+OFFICER: David Kovacs (Shift Patrol Specialist #408)
+DATE OF INTERVIEW: 2026-03-05 22:30 UTC
+
+STATEMENT:
+"On the evening of March 5, 2026, I was assigned to interior patrol duty covering Sector B and the transit warehouse bays.
+At approximately 21:18 UTC, the secondary annunciator panel in the sub-station alerted to an unscheduled contact trip on the Vault C boundary door.
+I immediately moved on foot toward Corridor 3 to investigate the alert.
+As I approached the intersection leading from the vault hallway, at roughly 21:22 UTC, I observed an individual wearing a dark grey hooded jacket and carrying a dark shoulder sling bag walking rapidly toward the north exit corridor.
+The person did not stop or answer when I called out from down the hall and exited through the North Gate 12 turnstile area before I could intercept them.
+Upon reaching Vault C at 21:24 UTC, I observed that the auxiliary padlock hasp was hanging open with visible fresh gouge marks on the latch plate.
+I contacted Central Dispatch at 21:25 UTC to declare a physical perimeter breach and requested an immediate shift inventory audit."
+
+I declare that this statement is an accurate and direct record of my sensory observations.
+Signed: Officer David Kovacs, ID #408

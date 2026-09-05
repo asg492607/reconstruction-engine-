@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import engine, Base
@@ -43,9 +43,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
 
-# Mount Routers
+from app.department_engines.router import router as engines_router
+
 app.include_router(auth_router)
 app.include_router(cases_router)
+app.include_router(engines_router)
 app.include_router(evidence_router)
 app.include_router(observations_router)
 app.include_router(entities_router)
@@ -88,4 +90,23 @@ async def health_check():
         "environment": settings.ENVIRONMENT,
         "storage_backend": settings.STORAGE_BACKEND
     }
+
+@app.get("/{full_path:path}", include_in_schema=False)
+async def spa_fallback(full_path: str):
+    # Check if a static file in dist matches (e.g. favicon.svg, icons.svg)
+    candidate = os.path.join(frontend_dist, full_path)
+    if os.path.isfile(candidate):
+        return FileResponse(candidate)
+    
+    # Check for Vite built frontend index.html for client-side routing
+    dist_index = os.path.join(frontend_dist, "index.html")
+    if os.path.exists(dist_index):
+        return FileResponse(dist_index)
+    
+    # Check for legacy static index
+    legacy_index = os.path.join(static_dir, "index.html")
+    if os.path.exists(legacy_index):
+        return FileResponse(legacy_index)
+        
+    return Response(content="Not Found", status_code=404)
 

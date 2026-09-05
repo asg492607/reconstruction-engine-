@@ -42,7 +42,7 @@ export default function ForensicDashboard({ evidence = [], observations = [], on
             Toolmark Feature Extraction & Visual Media Workstation
           </h1>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-            Specialist: Dr. Aris Thorne • Department: Forensics & Biometrics
+            Specialist: Forensic Examiner • Department: Forensic Science Division
           </p>
         </div>
 
@@ -64,25 +64,25 @@ export default function ForensicDashboard({ evidence = [], observations = [], on
       }}>
         <div className="card" style={{ padding: '18px' }}>
           <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px' }}>
-            Assisted Toolmark Measurement
+            Forensic Exhibits
           </div>
           <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-main)' }}>
-            18mm Profile
+            {forensicEvidence.length} Exhibits
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-            Extracted region awaiting specialist signoff
+            {forensicEvidence.length > 0 ? 'Deposited in Evidence Vault' : 'No exhibits deposited yet'}
           </div>
         </div>
 
         <div className="card" style={{ padding: '18px' }}>
           <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px' }}>
-            CCTV Keyframes Analyzed
+            Toolmark & Damage Observations
           </div>
           <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-main)' }}>
-            14 Frames
+            {observations.length} Observations
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-            Timestamp range 02:44 - 02:54
+            {observations.length > 0 ? 'Extracted from scene photos' : 'Awaiting F01-F09 execution'}
           </div>
         </div>
 
@@ -91,10 +91,10 @@ export default function ForensicDashboard({ evidence = [], observations = [], on
             Chain of Custody Intact
           </div>
           <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--success-text)' }}>
-            100%
+            {evidence.length > 0 ? '100%' : 'N/A'}
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--success-text)', marginTop: '4px' }}>
-            All Hashes Verified
+            {evidence.length > 0 ? 'All Hashes Verified' : 'No evidence deposited'}
           </div>
         </div>
       </div>

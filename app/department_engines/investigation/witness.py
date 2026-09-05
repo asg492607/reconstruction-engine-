@@ -8,7 +8,7 @@ from app.models.enums import (
 from app.observations.schemas import ObservationCreate
 
 TIME_REGEX = re.compile(r'\b(\d{1,2}(?::\d{2})?\s*(?:AM|PM|am|pm))\b|\b(\d{1,2}:\d{2})\b')
-CLOTHING_REGEX = re.compile(r'\b(?:wearing|in)\s+((?:a\s+)?(?:black|dark|navy|blue|red|green|grey|white)?\s*(?:jacket|hoodie|coat|shirt|jeans|cap|mask))\b', re.IGNORECASE)
+CLOTHING_REGEX = re.compile(r'\b(?:wearing|in|had|with)\s+((?:a\s+)?(?:bright|light|dark)?\s*(?:black|dark|navy|blue|red|green|grey|white)?\s*(?:jacket|hoodie|coat|shirt|jeans|cap|mask|pants))\b', re.IGNORECASE)
 LOCATION_REGEX = re.compile(r'\b(?:near|at|by|in|around)\s+(?:the\s+)?([a-zA-Z0-9\s]+(?:shelf|counter|aisle|entrance|exit|store|display|register|parking))\b', re.IGNORECASE)
 ITEM_REGEX = re.compile(r'\b(iPhone|phone|watch|jewelry|ring|necklace|laptop|cash|tablet|camera)\b', re.IGNORECASE)
 

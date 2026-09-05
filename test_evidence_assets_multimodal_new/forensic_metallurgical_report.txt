@@ -1,0 +1,19 @@
+FORENSIC PHYSICAL EVIDENCE & TOOLMARK EXAMINATION
+LABORATORY REPORT #FLR-2026-03-902
+EXAMINATION DATE: 2026-03-05 23:15 UTC
+AGENCY CASE: SEC-2026-0842
+
+EXHIBIT RECEIVED:
+Exhibit F-01: Vault C door auxiliary steel locking hasp and mounting plate.
+
+EXAMINATION & MACROSCOPIC ANALYSIS:
+1. Microscopic inspection at 35x and 70x magnification reveals distinctive compressive shear and levering marks along the strike edge of the mounting plate.
+2. Blade contact impression width measures 17.5 mm (+/- 0.2 mm) with a single-bevel profile and an impression depth of 4.5 mm.
+3. Localized striations indicate unidirectional prying leverage applied from below the hasp body.
+4. Trace copper-alloy microscopic transfer was detected along the primary striation furrow, indicating tool composition or plating.
+
+EXAMINER OPINION:
+The deformation is consistent with mechanical forced entry using a flat-blade prying implement (nominal blade width ~17.5mm, such as a heavy-duty pry lever or chisel). Toolmark features are suitable for microscopic class characteristic comparison if candidate physical tools are submitted.
+
+Lead Forensic Examiner: Dr. Elena Rostova, D-ABC
+Physical Evidence Unit

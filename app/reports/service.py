@@ -59,12 +59,13 @@ async def generate_case_report(
             "status": case.status.value,
         },
         "executive_summary": {
-            "incident_overview": f"Theft investigation into missing electronics reported at {case.incident_location or 'premises'}.",
-            "primary_hypothesis": hypotheses[0].label if hypotheses else "Reconstruction completed.",
-            "overall_strength": hypotheses[0].overall_strength.value if hypotheses else "STRONG",
+            "incident_overview": f"Investigation into {case.case_type.value.lower()} reported at {case.incident_location or 'premises'}: {case.title}.",
+            "primary_hypothesis": hypotheses[0].label if hypotheses else "Insufficient evidence for reconstruction.",
+            "overall_strength": hypotheses[0].overall_strength.value if hypotheses else "UNKNOWN",
             "total_evidence_sources": len(evidence_items),
             "total_observations": len(observations),
-            "critical_gaps_identified": len([g for g in gaps if g.significance.value == "CRITICAL"])
+            "critical_gaps_identified": len([g for g in gaps if g.significance.value == "CRITICAL"]),
+            "non_verdict_notice": "This platform produces an evidence-grounded reconstruction of factual observations, gaps, and competing hypotheses. It makes no autonomous assertion of legal guilt, statutory violation, or culpability. Final legal and procedural decisions remain exclusively with authorized human personnel."
         },
         "chain_of_custody_and_evidence": [
             {

@@ -180,3 +180,71 @@ async def get_version(
     if not version:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Version not found")
     return version
+
+@router.get("/{case_id}/analysis-plan")
+async def get_analysis_plan_for_case(
+    case_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    case = await get_case_by_id(db, case_id)
+    if not case:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
+    from app.department_engines.dispatcher import get_case_analysis_plan
+    plan = await get_case_analysis_plan(db, case)
+    return plan
+
+@router.post("/{case_id}/run-analysis")
+async def trigger_case_analysis(
+    case_id: str,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    case = await get_case_by_id(db, case_id)
+    if not case:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
+    from app.department_engines.dispatcher import execute_case_analysis_plan
+    result = await execute_case_analysis_plan(db, case, user_id=current_user.id)
+    await record_audit_log(
+        db=db,
+        action="CASE_ANALYSIS_EXECUTED",
+        case_id=case_id,
+        user=current_user,
+        target_type="CASE",
+        target_id=case_id,
+        after_state={
+            "run_id": result.get("run_id"),
+            "run_number": result.get("run_number"),
+            "engines_run": result.get("engines_executed"),
+            "observations": result.get("observations_created")
+        },
+        ip_address=request.client.host if request.client else None
+    )
+    return result
+
+@router.get("/{case_id}/engine-telemetry")
+async def get_engine_telemetry(
+    case_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    case = await get_case_by_id(db, case_id)
+    if not case:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
+    from app.department_engines.dispatcher import get_case_telemetry
+    return get_case_telemetry(case_id)
+
+@router.get("/{case_id}/analysis-runs")
+async def get_case_analysis_runs(
+    case_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    case = await get_case_by_id(db, case_id)
+    if not case:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Case not found")
+    from app.department_engines.dispatcher import get_case_analysis_runs
+    return get_case_analysis_runs(case_id)
+
+

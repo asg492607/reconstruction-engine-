@@ -77,6 +77,8 @@ async def verify_observation(
         obs.verification_status = VerificationStatus.CORRECTED
         if corrected_data:
             obs.raw_data.update(corrected_data)
+    elif action == VerificationAction.REANALYSIS_REQUESTED:
+        obs.verification_status = VerificationStatus.REANALYSIS_REQUESTED
     else:
         obs.verification_status = VerificationStatus.REJECTED
 

@@ -18,10 +18,14 @@ import GapsConflictsRadar from './components/modules/GapsConflictsRadar';
 import EntityNetwork from './components/modules/EntityNetwork';
 import CopilotChat from './components/modules/CopilotChat';
 import DossierViewer from './components/modules/DossierViewer';
+import AnalysisPlanViewer from './components/modules/AnalysisPlanViewer';
+import UnifiedReconstructionOutput from './components/modules/UnifiedReconstructionOutput';
+import NewCaseModal from './components/modals/NewCaseModal';
 
 export default function App() {
   const [user, setUser] = useState(getSavedUser());
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [newCaseModalOpen, setNewCaseModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
 
   // Case Data
@@ -32,6 +36,7 @@ export default function App() {
   const [hypotheses, setHypotheses] = useState([]);
   const [gapsConflicts, setGapsConflicts] = useState([]);
   const [entities, setEntities] = useState([]);
+  const [telemetry, setTelemetry] = useState([]);
 
   const [loading, setLoading] = useState(false);
   const [reconstructionLoading, setReconstructionLoading] = useState(false);
@@ -57,6 +62,13 @@ export default function App() {
       setCases(caseList);
       if (caseList && caseList.length > 0) {
         setActiveCase(caseList[0]);
+      } else {
+        setActiveCase(null);
+        setEvidence([]);
+        setTimelineEvents([]);
+        setHypotheses([]);
+        setGapsConflicts([]);
+        setEntities([]);
       }
     } catch (err) {
       console.error("Failed to load cases:", err);
@@ -67,12 +79,13 @@ export default function App() {
 
   const loadCaseDetails = async (caseId) => {
     try {
-      const [evList, tlData, hypList, gcList, entList] = await Promise.allSettled([
+      const [evList, tlData, hypList, gcList, entList, teleData] = await Promise.allSettled([
         api.evidence.list(caseId),
         api.timelines.getCorrelated(caseId),
         api.reconstruction.list(caseId),
         api.gapsConflicts.list(caseId),
-        api.entities.list(caseId)
+        api.entities.list(caseId),
+        api.cases.getTelemetry(caseId)
       ]);
 
       if (evList.status === 'fulfilled') setEvidence(evList.value || []);
@@ -83,6 +96,7 @@ export default function App() {
       if (hypList.status === 'fulfilled') setHypotheses(hypList.value || []);
       if (gcList.status === 'fulfilled') setGapsConflicts(gcList.value || []);
       if (entList.status === 'fulfilled') setEntities(entList.value || []);
+      if (teleData.status === 'fulfilled') setTelemetry(teleData.value || []);
     } catch (err) {
       console.error("Error loading case details:", err);
     }
@@ -110,9 +124,9 @@ export default function App() {
     if (!activeCase?.id) return;
     setReconstructionLoading(true);
     try {
-      const result = await api.reconstruction.generate(activeCase.id);
+      await api.cases.runAnalysis(activeCase.id);
       await loadCaseDetails(activeCase.id);
-      setActiveTab('reconstruction');
+      setActiveTab('output');
     } catch (err) {
       alert("Reconstruction failed: " + err.message);
     } finally {
@@ -147,18 +161,29 @@ export default function App() {
         cases={cases}
         activeCase={activeCase}
         onSelectCase={handleSelectCase}
+        onNewCase={() => setNewCaseModalOpen(true)}
       />
 
       <main className="container-xl" style={{ flex: 1, padding: '24px 16px' }}>
+        {activeTab === 'plan' && (
+          <AnalysisPlanViewer
+            activeCase={activeCase}
+            onAnalysisComplete={async () => {
+              await loadCaseDetails(activeCase?.id);
+              setActiveTab('output');
+            }}
+          />
+        )}
+
         {activeTab === 'overview' && (
           <>
-            {user.role === 'FORENSIC_SPECIALIST' ? (
+            {user.role === 'FORENSIC_OFFICER' || user.role === 'FORENSIC_SPECIALIST' ? (
               <ForensicDashboard
                 caseData={activeCase}
                 evidence={evidence}
                 onNavigate={setActiveTab}
               />
-            ) : user.role === 'FINANCIAL_AUDITOR' ? (
+            ) : user.role === 'FINANCIAL_ANALYST' || user.role === 'FINANCIAL_AUDITOR' ? (
               <FinancialDashboard
                 caseData={activeCase}
                 evidence={evidence}
@@ -182,6 +207,13 @@ export default function App() {
                 onNavigate={setActiveTab}
                 onTriggerReconstruction={handleTriggerReconstruction}
                 reconstructionLoading={reconstructionLoading}
+                onCaseCreated={async (newCase) => {
+                  setCases(prev => [newCase, ...(prev || [])]);
+                  setActiveCase(newCase);
+                  if (newCase?.id) {
+                    await loadCaseDetails(newCase.id);
+                  }
+                }}
               />
             )}
           </>
@@ -231,13 +263,17 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'dossier' && (
-          <DossierViewer
+        {(activeTab === 'output' || activeTab === 'dossier') && (
+          <UnifiedReconstructionOutput
             caseData={activeCase}
             evidence={evidence}
             timelineEvents={timelineEvents}
             hypotheses={hypotheses}
             gapsConflicts={gapsConflicts}
+            entities={entities}
+            telemetry={telemetry}
+            onRunReconstruction={handleTriggerReconstruction}
+            reconstructionLoading={reconstructionLoading}
           />
         )}
       </main>
@@ -246,6 +282,16 @@ export default function App() {
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
         onAuthSuccess={handleAuthSuccess}
+      />
+
+      <NewCaseModal
+        isOpen={newCaseModalOpen}
+        onClose={() => setNewCaseModalOpen(false)}
+        onCaseCreated={(newCase) => {
+          setCases(prev => [newCase, ...prev]);
+          setActiveCase(newCase);
+          setActiveTab('plan');
+        }}
       />
     </div>
   );

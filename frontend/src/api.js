@@ -39,12 +39,17 @@ async function apiRequest(endpoint, options = {}) {
   }
 
   if (!response.ok) {
-    let errorDetail = "An unexpected error occurred.";
+    let errorDetail = `HTTP error ${response.status}`;
     try {
-      const errJson = await response.json();
-      errorDetail = errJson.detail || JSON.stringify(errJson);
+      const errText = await response.text();
+      try {
+        const errJson = JSON.parse(errText);
+        errorDetail = errJson.detail || JSON.stringify(errJson);
+      } catch {
+        errorDetail = errText || errorDetail;
+      }
     } catch {
-      errorDetail = await response.text();
+      // fallback
     }
     throw new Error(errorDetail || `HTTP error ${response.status}`);
   }
@@ -92,7 +97,18 @@ export const api = {
     create: async (payload) => apiRequest("/cases", {
       method: "POST",
       body: JSON.stringify(payload)
-    })
+    }),
+    getAnalysisPlan: async (caseId) => apiRequest(`/cases/${caseId}/analysis-plan`),
+    runAnalysis: async (caseId) => apiRequest(`/cases/${caseId}/run-analysis`, {
+      method: "POST"
+    }),
+    getTelemetry: async (caseId) => apiRequest(`/cases/${caseId}/engine-telemetry`)
+  },
+
+  engines: {
+    list: async () => apiRequest("/engines"),
+    get: async (id) => apiRequest(`/engines/${id}`),
+    resolveDag: async (targets = ["R04"]) => apiRequest(`/engines/dag/resolve?${targets.map(t => `targets=${t}`).join('&')}`)
   },
 
   evidence: {

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Shield, 
   FileText, 
@@ -11,8 +11,10 @@ import {
   ArrowRight,
   Database,
   Sparkles,
-  Upload
+  Upload,
+  Plus
 } from 'lucide-react';
+import DashboardCaseIntakeWizard from '../modules/DashboardCaseIntakeWizard';
 
 export default function LeadInvestigatorDashboard({ 
   caseData, 
@@ -23,10 +25,31 @@ export default function LeadInvestigatorDashboard({
   entities = [], 
   onNavigate,
   onTriggerReconstruction,
-  reconstructionLoading
+  reconstructionLoading,
+  onCaseCreated
 }) {
+  const [showIntakeForm, setShowIntakeForm] = useState(!caseData);
   const highGaps = gapsConflicts.filter(g => g.severity === 'HIGH');
   const unconfirmedEntities = entities.filter(e => e.status !== 'CONFIRMED');
+
+  const handleCaseCreatedInternal = (newCase) => {
+    setShowIntakeForm(false);
+    if (onCaseCreated) {
+      onCaseCreated(newCase);
+    }
+  };
+
+  // If no case selected or user clicked to register a new incident, render the intake wizard directly on the dashboard
+  if (!caseData || showIntakeForm) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <DashboardCaseIntakeWizard
+          onCaseCreated={handleCaseCreatedInternal}
+          onCancel={caseData ? () => setShowIntakeForm(false) : null}
+        />
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -44,27 +67,36 @@ export default function LeadInvestigatorDashboard({
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
             <span className="badge badge-blue">Lead Investigator Command HUD</span>
-            <span className="badge badge-purple">{caseData?.case_number || 'CASE-ACTIVE'}</span>
+            <span className="badge badge-purple">{caseData?.case_number || 'NO ACTIVE CASE'}</span>
           </div>
           <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: '4px' }}>
-            {caseData?.title || 'Electronics Store Burglary Investigation'}
+            {caseData?.title || 'No Active Investigation Case'}
           </h1>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-            Theft Domain: Commercial Burglary • Lead Detective: Harris • Status: Active Synthesis
+            {caseData ? `Theft Domain: ${caseData.specific_offense || caseData.case_type || 'Theft / Robbery'} • Status: ${caseData.status || 'Active'}` : 'Create a new case using the "+ New Case" button in the navigation bar to begin intake.'}
           </p>
         </div>
 
         <div style={{ display: 'flex', gap: '10px' }}>
           <button 
+            onClick={() => setShowIntakeForm(true)} 
+            className="btn btn-outline"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <Plus size={16} />
+            Register Incident
+          </button>
+          <button 
             onClick={() => onNavigate('evidence')} 
             className="btn btn-outline"
+            disabled={!caseData}
           >
             <Upload size={16} />
             Intake Evidence
           </button>
           <button 
             onClick={onTriggerReconstruction} 
-            disabled={reconstructionLoading}
+            disabled={reconstructionLoading || !caseData}
             className="btn btn-primary"
           >
             <Sparkles size={16} />
@@ -123,7 +155,7 @@ export default function LeadInvestigatorDashboard({
             <GitBranch size={18} color="#7c3aed" />
           </div>
           <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-main)' }}>
-            {hypotheses.length || 2}
+            {hypotheses.length}
           </div>
           <div style={{ fontSize: '0.75rem', color: '#7c3aed', fontWeight: 600, marginTop: '4px' }}>
             Self-Challenged AI
@@ -175,55 +207,47 @@ export default function LeadInvestigatorDashboard({
               <h3 style={{ fontSize: '1.05rem', fontWeight: 700 }}>Leading Theft Hypotheses</h3>
             </div>
             <button 
-              onClick={() => onNavigate('reconstruction')} 
+              onClick={() => onNavigate('output')} 
               className="btn btn-secondary btn-sm"
             >
-              Inspect All
+              View Dossier
             </button>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div style={{
-              padding: '14px',
-              borderRadius: 'var(--radius-md)',
-              border: '1px solid var(--primary-border)',
-              backgroundColor: 'var(--bg-accent-light)'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-main)' }}>
-                  Hypothesis A: Rapid Forced Entry & Exfiltration
-                </span>
-                <span className="badge badge-blue">Strong Support</span>
+            {hypotheses.length === 0 ? (
+              <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                No hypotheses synthesized yet. Upload evidence and run the reconstruction engine.
               </div>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: '8px' }}>
-                Perpetrator crowbarred alley service door at 02:45, targeted pre-identified high-value iPhone stock in backroom, and departed in dark sedan by 02:54.
-              </p>
-              <div style={{ display: 'flex', gap: '8px', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                <span>• 4 Supporting Claims</span>
-                <span>• 0 Contradictory Physical Findings</span>
-                <span>• 3 Independent Sources</span>
-              </div>
-            </div>
-
-            <div style={{
-              padding: '14px',
-              borderRadius: 'var(--radius-md)',
-              border: '1px solid var(--border-light)',
-              backgroundColor: '#ffffff'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-main)' }}>
-                  Hypothesis B: Staged Break-In / Inside Collusion
-                </span>
-                <span className="badge badge-amber">Challenged / Inconsistent</span>
-              </div>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: '8px' }}>
-                Night security guard collusion: keycard disablement window matching alley door access.
-              </p>
-              <div style={{ display: 'flex', gap: '8px', fontSize: '0.72rem', color: '#dc2626' }}>
-                <span>• Challenged by deep pry toolmark telemetry</span>
-              </div>
-            </div>
+            ) : (
+              hypotheses.slice(0, 3).map((h, idx) => (
+                <div 
+                  key={h.id || h.hypothesis_id || idx}
+                  style={{
+                    padding: '14px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--primary-border)',
+                    backgroundColor: idx === 0 ? 'var(--bg-accent-light)' : '#ffffff'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-main)' }}>
+                      {h.title || h.hypothesis_title || `Hypothesis #${idx + 1}`}
+                    </span>
+                    <span className={h.theft_conclusion_supported === false ? "badge badge-amber" : "badge badge-blue"}>
+                      {h.support_level || (h.theft_conclusion_supported === false ? "Alternative / Partial" : "Candidate")}
+                    </span>
+                  </div>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.5, marginBottom: '8px' }}>
+                    {h.narrative}
+                  </p>
+                  <div style={{ display: 'flex', gap: '8px', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                    <span>• {h.supporting_evidence_citations?.length || h.supporting_claims?.length || 0} Citations</span>
+                    {h.critical_gap && <span style={{ color: '#dc2626' }}>• {h.critical_gap}</span>}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
 
@@ -243,39 +267,36 @@ export default function LeadInvestigatorDashboard({
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div style={{
-              padding: '14px',
-              borderRadius: 'var(--radius-md)',
-              border: '1px solid var(--danger-border)',
-              backgroundColor: 'var(--danger-bg)'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                <span style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--danger-text)' }}>
-                  CCTV Blindspot & Blackout Interval
-                </span>
-                <span className="badge badge-red">COVERAGE VOID</span>
+            {gapsConflicts.length === 0 ? (
+              <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                No active evidentiary gaps or conflicts identified.
               </div>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-main)', lineHeight: 1.5 }}>
-                15-minute coverage void between 02:40 and 02:55 on Camera #2 (Alley Exit). Potential additional source: municipal traffic camera at Elm & 5th. Suggested action: request footage via applicable agency procedure.
-              </p>
-            </div>
-
-            <div style={{
-              padding: '14px',
-              borderRadius: 'var(--radius-md)',
-              border: '1px solid var(--warning-border)',
-              backgroundColor: 'var(--warning-bg)'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                <span style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--warning-text)' }}>
-                  Witness Sighting vs Keycard Telemetry Conflict
-                </span>
-                <span className="badge badge-amber">STATEMENT CONFLICT</span>
-              </div>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-main)', lineHeight: 1.5 }}>
-                Witness claims guard was at front desk at 02:45; electronic access log registers badge swipe at warehouse loading bay at 02:46.
-              </p>
-            </div>
+            ) : (
+              gapsConflicts.slice(0, 3).map((gc, idx) => (
+                <div 
+                  key={gc.id || idx}
+                  style={{
+                    padding: '14px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-light)',
+                    backgroundColor: gc.severity === 'HIGH' ? 'var(--danger-bg)' : 'var(--warning-bg)',
+                    borderColor: gc.severity === 'HIGH' ? 'var(--danger-border)' : 'var(--warning-border)'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                    <span style={{ fontWeight: 700, fontSize: '0.875rem', color: gc.severity === 'HIGH' ? 'var(--danger-text)' : 'var(--warning-text)' }}>
+                      {gc.title || gc.conflict_type || gc.gap_type || `Anomaly #${idx + 1}`}
+                    </span>
+                    <span className={gc.severity === 'HIGH' ? 'badge badge-red' : 'badge badge-amber'}>
+                      {gc.severity || gc.conflict_type || 'FLAGGED'}
+                    </span>
+                  </div>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-main)', lineHeight: 1.5 }}>
+                    {gc.description || gc.discrepancy_explanation}
+                  </p>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>

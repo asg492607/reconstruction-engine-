@@ -28,8 +28,26 @@ class Settings(BaseSettings):
     MINIO_BUCKET_NAME: str = "rre-evidence"
     MINIO_SECURE: bool = False
 
-    # LLM
+    # LLM Configuration
     GEMINI_API_KEY: str = ""
+    GEMINI_API_KEYS: str = ""
+    OPENAI_API_KEY: str = ""
+    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
     LLM_MODEL: str = "gemini-1.5-flash"
+    LLM_PROVIDER: Literal["GEMINI", "OPENAI", "LOCAL", "AUTO"] = "AUTO"
+
+    def get_gemini_api_keys(self) -> list[str]:
+        keys = []
+        raw = f"{self.GEMINI_API_KEY},{self.GEMINI_API_KEYS}"
+        for item in raw.split(","):
+            cleaned = item.strip().strip('"').strip("'")
+            if cleaned and cleaned not in keys:
+                keys.append(cleaned)
+        return keys
+
+    @property
+    def primary_gemini_api_key(self) -> str:
+        keys = self.get_gemini_api_keys()
+        return keys[0] if keys else ""
 
 settings = Settings()

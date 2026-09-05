@@ -37,7 +37,7 @@ export default function FinancialDashboard({ evidence = [], onNavigate }) {
             Theft Loss & Discrepancy Reconciliation
           </h1>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-            Auditor: Claire Sterling • Department: Financial Crimes Division
+            Specialist: Financial Auditor • Department: Financial Crimes Division
           </p>
         </div>
 
@@ -59,37 +59,37 @@ export default function FinancialDashboard({ evidence = [], onNavigate }) {
       }}>
         <div className="card" style={{ padding: '18px' }}>
           <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px' }}>
-            Total Verified Loss Delta
+            Financial Exhibits Deposited
           </div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#dc2626' }}>
-            $4,200.00
+          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: financialEvidence.length > 0 ? '#dc2626' : 'var(--text-main)' }}>
+            {financialEvidence.length}
           </div>
-          <div style={{ fontSize: '0.75rem', color: '#dc2626', fontWeight: 600, marginTop: '4px' }}>
-            3 Units Apple iPhone 16 Pro Max
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+            Ledgers and transaction streams
           </div>
         </div>
 
         <div className="card" style={{ padding: '18px' }}>
           <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px' }}>
-            Serial / IMEI Numbers Extracted
+            Total Ingested Evidence
           </div>
           <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-main)' }}>
-            3 IMEIs
+            {evidence.length}
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--success-text)', fontWeight: 600, marginTop: '4px' }}>
-            Matched against authorized registry dataset
+            Cryptographically sealed
           </div>
         </div>
 
         <div className="card" style={{ padding: '18px' }}>
           <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px' }}>
-            Secondary Market Flag
+            Reconciliation Status
           </div>
-          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#d97706' }}>
-            1 Flag
+          <div style={{ fontSize: '1.75rem', fontWeight: 800, color: financialEvidence.length > 0 ? '#10b981' : 'var(--text-muted)' }}>
+            {financialEvidence.length > 0 ? 'ACTIVE' : 'IDLE'}
           </div>
-          <div style={{ fontSize: '0.75rem', color: '#d97706', marginTop: '4px' }}>
-            Candidate listing match in supplied data
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+            Awaiting FI01-FI07 engine execution
           </div>
         </div>
       </div>
@@ -125,26 +125,10 @@ export default function FinancialDashboard({ evidence = [], onNavigate }) {
               </tr>
             </thead>
             <tbody>
-              <tr style={{ borderBottom: '1px solid var(--border-light)' }}>
-                <td style={{ padding: '12px', fontWeight: 600 }}>Apple iPhone 16 Pro Max 256GB Space Black</td>
-                <td style={{ padding: '12px', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>IMEI-990281-01</td>
-                <td style={{ padding: '12px' }}>1</td>
-                <td style={{ padding: '12px' }}>$1,400.00</td>
-                <td style={{ padding: '12px' }}><span className="badge badge-red">STOLEN</span></td>
-              </tr>
-              <tr style={{ borderBottom: '1px solid var(--border-light)' }}>
-                <td style={{ padding: '12px', fontWeight: 600 }}>Apple iPhone 16 Pro Max 256GB Desert Titanium</td>
-                <td style={{ padding: '12px', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>IMEI-990281-02</td>
-                <td style={{ padding: '12px' }}>1</td>
-                <td style={{ padding: '12px' }}>$1,400.00</td>
-                <td style={{ padding: '12px' }}><span className="badge badge-red">STOLEN</span></td>
-              </tr>
-              <tr style={{ borderBottom: '1px solid var(--border-light)' }}>
-                <td style={{ padding: '12px', fontWeight: 600 }}>Apple iPhone 16 Pro Max 256GB Natural Titanium</td>
-                <td style={{ padding: '12px', fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>IMEI-990281-03</td>
-                <td style={{ padding: '12px' }}>1</td>
-                <td style={{ padding: '12px' }}>$1,400.00</td>
-                <td style={{ padding: '12px' }}><span className="badge badge-red">STOLEN</span></td>
+              <tr>
+                <td colSpan="5" style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  No inventory ledger items ingested yet. Deposit an inventory CSV in the Evidence Vault to reconcile stock discrepancies.
+                </td>
               </tr>
             </tbody>
           </table>

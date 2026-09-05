@@ -18,12 +18,12 @@ async def call_gemini(
     """
     Direct asynchronous call to Google Gemini 3.6 / Flash API using provided API key.
     """
-    if not settings.GEMINI_API_KEY:
+    keys = settings.get_gemini_api_keys()
+    if not keys:
         logger.warning("No GEMINI_API_KEY configured; returning None.")
         return None
 
-    model = settings.LLM_MODEL or "gemini-3.6-flash"
-    url = f"{GEMINI_BASE_URL}/{model}:generateContent?key={settings.GEMINI_API_KEY}"
+    model = settings.LLM_MODEL or "gemini-1.5-flash"
 
     payload: Dict[str, Any] = {
         "contents": [
@@ -45,28 +45,39 @@ async def call_gemini(
             "parts": [{"text": system_instruction}]
         }
 
-    try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.post(url, json=payload)
-            if resp.status_code != 200:
-                logger.error(f"Gemini API returned HTTP {resp.status_code}: {resp.text}")
-                return None
+    for idx, key in enumerate(keys):
+        url = f"{GEMINI_BASE_URL}/{model}:generateContent?key={key}"
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                resp = await client.post(url, json=payload)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    candidates = data.get("candidates", [])
+                    if not candidates:
+                        continue
 
-            data = resp.json()
-            candidates = data.get("candidates", [])
-            if not candidates:
-                return None
+                    content = candidates[0].get("content", {})
+                    parts = content.get("parts", [])
+                    if not parts:
+                        continue
 
-            content = candidates[0].get("content", {})
-            parts = content.get("parts", [])
-            if not parts:
-                return None
+                    return parts[0].get("text", "").strip()
+                elif resp.status_code == 429:
+                    logger.warning(
+                        f"Gemini API key #{idx+1} hit rate limit (429). "
+                        f"{'Failing over to next key...' if idx + 1 < len(keys) else 'All keys exhausted.'}"
+                    )
+                    continue
+                else:
+                    logger.error(f"Gemini API key #{idx+1} returned HTTP {resp.status_code}: {resp.text}")
+                    if resp.status_code in (400, 403) and idx + 1 < len(keys):
+                        continue
+        except Exception as e:
+            logger.error(f"Gemini API invocation failed for key #{idx+1}: {e}")
+            if idx + 1 < len(keys):
+                continue
 
-            return parts[0].get("text", "").strip()
-
-    except Exception as e:
-        logger.error(f"Gemini API invocation failed: {e}")
-        return None
+    return None
 
 async def query_gemini_json(
     prompt: str,

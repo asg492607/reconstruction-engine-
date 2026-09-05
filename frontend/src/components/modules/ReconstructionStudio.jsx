@@ -19,39 +19,7 @@ export default function ReconstructionStudio({
   reconstructionLoading,
   onVerifyFinding
 }) {
-  // If reconstructions is empty, show default structured hypotheses from engine
-  const hypothesesList = reconstructions.length > 0 ? reconstructions : [
-    {
-      id: 'hypo-a',
-      title: 'Hypothesis A: Rapid Forced Entry & Storage Exfiltration',
-      support_level: 'STRONG',
-      status: 'PROPOSED',
-      narrative: 'Perpetrator accessed the rear service entrance at approximately 02:45:10, leveraged an external tool to defeat the door strike plate, navigated to the storage cabinet containing cellular device inventory, and exfiltrated at 02:54:30 into a waiting dark sedan.',
-      supporting_claims: [
-        'Toolmark impressions matching mechanical prying on alley door frame',
-        'CCTV Camera #1 captured hooded individual entering alley at 02:45',
-        'Physical inventory records confirm 3 units iPhone 16 Pro Max missing',
-        'Dark sedan sighted exiting alleyway onto 5th Ave at 02:55'
-      ],
-      contradicting_claims: [],
-      self_challenge_notes: 'Tested against non-destructive insider keycard access: Strike plate deformation indicates external mechanical force, disproving unforced entry hypothesis.'
-    },
-    {
-      id: 'hypo-b',
-      title: 'Hypothesis B: Unforced Inside Entry / Staged Breach',
-      support_level: 'LIMITED',
-      status: 'CHALLENGED',
-      narrative: 'Premises occupant or security personnel colluded with perpetrator by leaving rear door unlatched prior to 02:45.',
-      supporting_claims: [
-        'Security guard electronic badge swipe registered near warehouse interior at 02:46'
-      ],
-      contradicting_claims: [
-        'Physical toolmarks and frame splintering document external mechanical breach while locked',
-        'No badge credential event registered at exterior entrance'
-      ],
-      self_challenge_notes: 'Hypothesis B has been challenged by the following evidence inconsistency: Physical mechanical prying marks are inconsistent with pre-arranged unforced access.'
-    }
-  ];
+  const hypothesesList = reconstructions || [];
 
   const getSupportBadgeClass = (level) => {
     switch (level) {
@@ -121,8 +89,27 @@ export default function ReconstructionStudio({
       </div>
 
       {/* Hypotheses Cards Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '20px' }}>
-        {hypothesesList.map((hypo, idx) => {
+      {hypothesesList.length === 0 ? (
+        <div className="card" style={{ padding: '48px 24px', textAlign: 'center' }}>
+          <GitBranch size={36} color="var(--text-light)" style={{ margin: '0 auto 12px' }} />
+          <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: '6px' }}>
+            No Reconstruction Hypotheses Generated
+          </h3>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', maxWidth: '480px', margin: '0 auto 16px' }}>
+            Reconstruction hypotheses are dynamically synthesized from deposited evidence. Deposit exhibits in the Evidence Vault and run the Analysis Plan.
+          </p>
+          <button
+            onClick={onTriggerReconstruction}
+            disabled={reconstructionLoading}
+            className="btn btn-primary"
+          >
+            <Sparkles size={16} />
+            {reconstructionLoading ? 'Synthesizing...' : 'Generate Hypotheses'}
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '20px' }}>
+          {hypothesesList.map((hypo, idx) => {
           const supportLevel = hypo.overall_strength || hypo.support_level || (hypo.plausibility > 0.6 ? 'STRONG' : 'LIMITED');
           const isLeading = supportLevel === 'STRONG';
           const title = hypo.label || hypo.title || `Hypothesis ${idx + 1}`;
@@ -284,7 +271,8 @@ export default function ReconstructionStudio({
             </div>
           );
         })}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

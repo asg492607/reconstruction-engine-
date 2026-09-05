@@ -36,11 +36,44 @@ class FinancialTransactionProcessor:
         stolen_item_keywords = ["iphone", "smartphone", "handset", "laptop", "gold", "jewelry", "watch"]
         matching_purchases = []
 
+        # Check for authorized stock-adjustment or inventory write-off records
+        authorized_adjustments = []
         for tx in transactions:
-            item_desc = tx.get("item", tx.get("description", "")).lower()
-            is_accessory = any(acc in item_desc for acc in accessories)
-            if not is_accessory and any(k in item_desc for k in stolen_item_keywords):
-                matching_purchases.append(tx)
+            row_str = " ".join(str(v).lower() for v in tx.values())
+            adj_type = tx.get("adjustment_type", tx.get("type", tx.get("action", ""))).lower()
+            reason = tx.get("reason", tx.get("notes", tx.get("description", ""))).lower()
+            if any(k in adj_type for k in ["adjustment", "write_off", "write-off", "transfer", "rma", "return"]) or \
+               any(k in reason for k in ["authorized", "stock adjustment", "warehouse transfer", "inventory write-off", "rma", "damaged write-off", "return", "restock"]) or \
+               "stock_adjustment" in row_str or "authorized_adjustment" in row_str:
+                authorized_adjustments.append(tx)
+
+        if authorized_adjustments:
+            for adj in authorized_adjustments:
+                observations.append(
+                    ObservationCreate(
+                        evidence_id=evidence_id,
+                        department=Department.FINANCIAL,
+                        observation_type=ObservationType.TRANSACTION_FLAGGED,
+                        raw_data={
+                            "anomaly_type": "AUTHORIZED_STOCK_ADJUSTMENT_RECORDED",
+                            "adjustment_type": adj.get("adjustment_type", "AUTHORIZED_ADJUSTMENT"),
+                            "reason": adj.get("reason", adj.get("notes", "Authorized inventory adjustment / transfer")),
+                            "item": adj.get("item", adj.get("description", "Discrepant Item")),
+                            "finding": "Inventory variance is explained by an authorized stock adjustment log; discrepancy is not attributable to unauthorized theft.",
+                            "status": "AUTHORIZED"
+                        },
+                        observed_time_raw=adj.get("timestamp", "Stock Adjustment Log"),
+                        observed_time_parsed=base_dt,
+                        time_confidence=TimeConfidence.EXACT,
+                        time_source="erp_inventory_management",
+                        time_reliability=TimeReliability.HIGH,
+                        location_label="Inventory Control",
+                        observation_confidence=0.99,
+                        evidence_quality=EvidenceQuality.HIGH,
+                        model_name=self.model_name,
+                        model_version=self.model_version
+                    )
+                )
 
         if len(matching_purchases) == 0:
             # Observation: No transaction record matched the discrepant item in the provided logs

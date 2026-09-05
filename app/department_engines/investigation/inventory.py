@@ -40,8 +40,35 @@ class InventoryProcessor:
                 item_name = row.get("item", row.get("item_name", "Unknown Item"))
                 serial = row.get("serial", row.get("unit_id", "N/A"))
 
+                is_adj = any(k in str(row).lower() for k in ["authorized", "adjustment", "transfer", "write-off", "write_off", "rma", "damaged"])
+                if is_adj:
+                    observations.append(
+                        ObservationCreate(
+                            evidence_id=evidence_id,
+                            department=Department.INVESTIGATION,
+                            observation_type=ObservationType.OBJECT_DETECTED,
+                            raw_data={
+                                "item_name": item_name,
+                                "anomaly_type": "AUTHORIZED_STOCK_ADJUSTMENT_RECORDED",
+                                "status": "AUTHORIZED_STOCK_ADJUSTMENT",
+                                "reason": row.get("reason", "Authorized adjustment / transfer"),
+                                "delta": 0
+                            },
+                            observed_time_raw=row.get("timestamp", "Inventory Log"),
+                            observed_time_parsed=base_dt,
+                            time_confidence=TimeConfidence.EXACT,
+                            time_source="inventory_adjustment_log",
+                            time_reliability=TimeReliability.HIGH,
+                            location_label="Inventory Management",
+                            observation_confidence=0.99,
+                            evidence_quality=EvidenceQuality.HIGH,
+                            model_name=self.model_name,
+                            model_version=self.model_version
+                        )
+                    )
+
                 is_missing = "MISSING" in status or delta.startswith("-") or row.get("count", "") == "0"
-                if is_missing:
+                if is_missing and not is_adj:
                     # Parse times if present
                     last_seen_str = row.get("last_verified", row.get("time_in", None))
                     missing_str = row.get("reported_missing", row.get("time_out", None))
