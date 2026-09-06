@@ -47,6 +47,8 @@ class FinalVerificationDetermination(str, Enum):
     CONFLICT_FOUND          = "CONFLICT_FOUND"
     UNSUPPORTED_OUTPUT      = "UNSUPPORTED_OUTPUT"
     REANALYSIS_REQUIRED     = "REANALYSIS_REQUIRED"
+    HARD_INTEGRITY_VIOLATION = "HARD_INTEGRITY_VIOLATION"
+
 
 
 # ---------------------------------------------------------------------------
@@ -60,6 +62,8 @@ class VerificationIssue:
     description: str
     affected_engines: List[str] = field(default_factory=list)
     affected_outputs: List[str] = field(default_factory=list)
+    target_stage_for_reanalysis: str = ""
+    reanalysis_target_engines: List[str] = field(default_factory=list)
     recommendation: str = ""
 
 
@@ -74,11 +78,17 @@ class FinalVerificationResult:
     warnings: List[str] = field(default_factory=list)
     checks_passed: List[str] = field(default_factory=list)
     checks_failed: List[str] = field(default_factory=list)
+    reanalysis_plan: Dict[str, List[str]] = field(default_factory=dict)
+    recommended_reanalysis_engines: List[str] = field(default_factory=list)
     verification_timestamp: Optional[str] = None
     summary: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         from datetime import datetime, timezone
+        rec_engines = set(self.recommended_reanalysis_engines)
+        for i in self.issues:
+            rec_engines.update(i.reanalysis_target_engines or i.affected_engines)
+
         return {
             "determination": self.determination.value,
             "summary": self.summary,
@@ -86,12 +96,16 @@ class FinalVerificationResult:
             "checks_failed": self.checks_failed,
             "issue_count": len(self.issues),
             "warning_count": len(self.warnings),
+            "reanalysis_plan": self.reanalysis_plan,
+            "recommended_reanalysis_engines": sorted(list(rec_engines)),
             "issues": [
                 {
                     "check_id": i.check_id,
                     "severity": i.severity,
                     "description": i.description,
                     "affected_engines": i.affected_engines,
+                    "target_stage_for_reanalysis": i.target_stage_for_reanalysis or "DEPARTMENTAL_ANALYSIS",
+                    "reanalysis_target_engines": i.reanalysis_target_engines or i.affected_engines,
                     "recommendation": i.recommendation,
                 }
                 for i in self.issues
@@ -147,6 +161,7 @@ class FinalVerificationEngine:
         engine_outputs: Dict[str, Any],   # engine_id → EngineExecutionRecord
         valid_evidence_ids: Set[str],
         case_id: str,
+        analysis_version: int = 1,
     ) -> FinalVerificationResult:
         issues: List[VerificationIssue] = []
         warnings: List[str] = []
@@ -160,6 +175,34 @@ class FinalVerificationEngine:
             outs = getattr(rec, "outputs", None) or []
             engine_output_map[eid] = [o for o in outs if isinstance(o, dict)]
             all_outputs.extend(engine_output_map.get(eid, []))
+
+        # --- INTEGRITY CHECK: Case Scope Mismatch ---
+        issues_scope, warn_scope = self._check_case_scope(engine_outputs, case_id)
+        _record(issues, warnings, checks_passed, checks_failed, "CASE_SCOPE_MISMATCH", issues_scope, warn_scope)
+
+        # --- INTEGRITY CHECK: Analysis Version Mismatch ---
+        issues_ver, warn_ver = self._check_analysis_version(engine_outputs, analysis_version)
+        _record(issues, warnings, checks_passed, checks_failed, "ANALYSIS_VERSION_MISMATCH", issues_ver, warn_ver)
+
+        # --- INTEGRITY CHECK: Correlation Count Invariant (X06 vs X03) ---
+        issues_corr, warn_corr = self._check_correlation_count_integrity(engine_output_map, case_id, analysis_version)
+        _record(issues, warnings, checks_passed, checks_failed, "CORRELATION_COUNT_MISMATCH", issues_corr, warn_corr)
+
+        # --- INTEGRITY CHECK: Unknown Entity References (R01 vs X01) ---
+        issues_ent, warn_ent = self._check_unknown_entity_references(engine_output_map)
+        _record(issues, warnings, checks_passed, checks_failed, "UNKNOWN_ENTITY_REFERENCE", issues_ent, warn_ent)
+
+        # --- INTEGRITY CHECK: Stale Engine Output ---
+        issues_stale, warn_stale = self._check_stale_engine_outputs(engine_outputs, analysis_version)
+        _record(issues, warnings, checks_passed, checks_failed, "STALE_ENGINE_OUTPUT", issues_stale, warn_stale)
+
+        # --- INTEGRITY CHECK: Cross-Case Evidence Reference ---
+        issues_ccev, warn_ccev = self._check_cross_case_evidence_refs(engine_output_map, valid_evidence_ids)
+        _record(issues, warnings, checks_passed, checks_failed, "CROSS_CASE_EVIDENCE_REFERENCE", issues_ccev, warn_ccev)
+
+        # --- INTEGRITY CHECK: Modality Availability vs Engine Success ---
+        issues_mod, warn_mod = self._check_evidence_modality_contradiction(engine_output_map, engine_outputs)
+        _record(issues, warnings, checks_passed, checks_failed, "EVIDENCE_MODALITY_CONTRADICTION", issues_mod, warn_mod)
 
         # --- CHECK 01: Nonexistent Evidence References ---
         issues01, warn01 = self._check_evidence_refs(engine_output_map, valid_evidence_ids)
@@ -205,8 +248,18 @@ class FinalVerificationEngine:
         issues11, warn11 = self._check_cross_engine_contradictions(engine_output_map)
         _record(issues, warnings, checks_passed, checks_failed, "CHECK_11_CROSS_ENGINE", issues11, warn11)
 
-        # --- Determine final verdict ---
+        # --- Determine final verdict and reanalysis plan ---
         determination, summary = _determine_verdict(issues, warnings)
+
+        reanalysis_plan: Dict[str, List[str]] = {}
+        rec_engines: Set[str] = set()
+        for issue in issues:
+            targets = issue.reanalysis_target_engines or issue.affected_engines
+            rec_engines.update(targets)
+            stage = issue.target_stage_for_reanalysis or "DEPARTMENTAL_ANALYSIS"
+            reanalysis_plan.setdefault(stage, []).extend(targets)
+
+        reanalysis_plan = {k: sorted(list(set(v))) for k, v in reanalysis_plan.items()}
 
         return FinalVerificationResult(
             determination=determination,
@@ -214,11 +267,251 @@ class FinalVerificationEngine:
             warnings=warnings,
             checks_passed=checks_passed,
             checks_failed=checks_failed,
+            reanalysis_plan=reanalysis_plan,
+            recommended_reanalysis_engines=sorted(list(rec_engines)),
             summary=summary,
         )
 
     # -----------------------------------------------------------------------
-    # Individual check implementations
+    # Integrity Check implementations (Case Scope, Version, Accounting)
+    # -----------------------------------------------------------------------
+
+    def _check_case_scope(
+        self,
+        engine_outputs: Dict[str, Any],
+        target_case_id: str
+    ) -> tuple[List[VerificationIssue], List[str]]:
+        issues: List[VerificationIssue] = []
+        warnings: List[str] = []
+        for eid, rec in engine_outputs.items():
+            r_case_id = getattr(rec, "case_id", None)
+            if r_case_id and r_case_id != target_case_id:
+                issues.append(VerificationIssue(
+                    check_id="CASE_SCOPE_MISMATCH",
+                    severity="CRITICAL",
+                    description=f"Engine record for '{eid}' belongs to foreign case '{r_case_id}', expected '{target_case_id}'.",
+                    affected_engines=[eid],
+                    reanalysis_target_engines=[eid],
+                    recommendation="Purge cross-case artifact and re-run analysis in isolated case context."
+                ))
+            outs = getattr(rec, "outputs", []) or []
+            for out in outs:
+                if isinstance(out, dict):
+                    o_case_id = out.get("case_id")
+                    if o_case_id and o_case_id != target_case_id:
+                        issues.append(VerificationIssue(
+                            check_id="CASE_SCOPE_MISMATCH",
+                            severity="CRITICAL",
+                            description=f"Engine '{eid}' output contains item from foreign case '{o_case_id}'.",
+                            affected_engines=[eid],
+                            reanalysis_target_engines=[eid],
+                            recommendation="Purge cross-case artifact and re-run analysis in isolated case context."
+                        ))
+        return issues, warnings
+
+    def _check_analysis_version(
+        self,
+        engine_outputs: Dict[str, Any],
+        target_analysis_version: int
+    ) -> tuple[List[VerificationIssue], List[str]]:
+        issues: List[VerificationIssue] = []
+        warnings: List[str] = []
+        for eid, rec in engine_outputs.items():
+            r_version = getattr(rec, "analysis_version", None)
+            if r_version is not None and r_version != target_analysis_version:
+                issues.append(VerificationIssue(
+                    check_id="ANALYSIS_VERSION_MISMATCH",
+                    severity="CRITICAL",
+                    description=f"Engine record for '{eid}' has analysis_version {r_version}, expected active version {target_analysis_version}.",
+                    affected_engines=[eid],
+                    reanalysis_target_engines=[eid],
+                    recommendation="Stale analysis version detected. Discard prior version results and re-run analysis."
+                ))
+            outs = getattr(rec, "outputs", []) or []
+            for out in outs:
+                if isinstance(out, dict):
+                    o_version = out.get("analysis_version")
+                    if o_version is not None and o_version != target_analysis_version:
+                        issues.append(VerificationIssue(
+                            check_id="ANALYSIS_VERSION_MISMATCH",
+                            severity="CRITICAL",
+                            description=f"Engine '{eid}' output has stale analysis_version {o_version}, expected active version {target_analysis_version}.",
+                            affected_engines=[eid],
+                            reanalysis_target_engines=[eid],
+                            recommendation="Stale analysis version detected in payload. Discard prior version results."
+                        ))
+        return issues, warnings
+
+    def _check_correlation_count_integrity(
+        self,
+        engine_output_map: Dict[str, List[Dict]],
+        case_id: str,
+        analysis_version: int
+    ) -> tuple[List[VerificationIssue], List[str]]:
+        issues: List[VerificationIssue] = []
+        warnings: List[str] = []
+        x06_outs = engine_output_map.get("X06", [])
+        x03_outs = engine_output_map.get("X03", [])
+        if x06_outs:
+            x06_corr = x06_outs[0].get("correlated_event_count")
+            x03_valid = [
+                c for c in x03_outs
+                if isinstance(c, dict) and c.get("correlation_type") not in ("INSUFFICIENT_MULTI_MODALITY", "TIMELINE_BREAK")
+            ]
+            x03_corr = len(x03_valid)
+            if x06_corr is not None and x06_corr != x03_corr:
+                issues.append(VerificationIssue(
+                    check_id="CORRELATION_COUNT_MISMATCH",
+                    severity="CRITICAL",
+                    description=(
+                        f"Accounting contradiction: X06 recorded {x06_corr} correlated events, "
+                        f"but X03 produced {x03_corr} for case '{case_id}' version {analysis_version}."
+                    ),
+                    affected_engines=["X06", "X03"],
+                    reanalysis_target_engines=["X06"],
+                    recommendation="Reconcile X06 sufficiency input with X03 output and re-run X06."
+                ))
+        return issues, warnings
+
+    def _check_unknown_entity_references(
+        self,
+        engine_output_map: Dict[str, List[Dict]]
+    ) -> tuple[List[VerificationIssue], List[str]]:
+        issues: List[VerificationIssue] = []
+        warnings: List[str] = []
+        x01_outs = engine_output_map.get("X01", [])
+        known_entity_ids = set()
+        known_entity_tokens = set()
+        for ent in x01_outs:
+            eid = ent.get("entity_id")
+            if eid:
+                known_entity_ids.add(eid)
+                known_entity_tokens.add(eid)
+            label = ent.get("candidate_label", "")
+            for tok in ["P1", "P2", "V1", "V2", "ITEM1", "ITEM2"]:
+                if tok in label or (eid and tok in eid):
+                    known_entity_tokens.add(tok)
+
+        for eid in ("R01", "R02", "R03", "R04"):
+            outs = engine_output_map.get(eid, [])
+            for out in outs:
+                deps = out.get("entity_link_dependence") or []
+                for dep in deps:
+                    if dep not in known_entity_ids and dep not in known_entity_tokens:
+                        issues.append(VerificationIssue(
+                            check_id="UNKNOWN_ENTITY_REFERENCE",
+                            severity="CRITICAL",
+                            description=(
+                                f"Engine '{eid}' references candidate entity '{dep}' "
+                                "which does not exist in X01 candidate entities output."
+                            ),
+                            affected_engines=[eid],
+                            reanalysis_target_engines=[eid],
+                            recommendation="Remove unverified entity reference and bind only to candidate entities resolved by X01."
+                        ))
+
+                narrative = str(out.get("narrative") or "")
+                lower_narr = narrative.lower()
+                for tok in ["P1", "V1", "ITEM1"]:
+                    if tok not in known_entity_tokens:
+                        tok_lower = tok.lower()
+                        if (
+                            f"entity {tok_lower}" in lower_narr
+                            or f"candidate entity {tok_lower}" in lower_narr
+                            or f"({tok_lower})" in lower_narr
+                            or f"({tok})" in narrative
+                            or f" {tok} " in narrative
+                            or f" {tok}," in narrative
+                            or f" {tok}." in narrative
+                        ):
+                            issues.append(VerificationIssue(
+                                check_id="UNKNOWN_ENTITY_REFERENCE",
+                                severity="CRITICAL",
+                                description=(
+                                    f"Engine '{eid}' narrative references unextracted entity '{tok}' "
+                                    "which was not generated by X01."
+                                ),
+                                affected_engines=[eid],
+                                reanalysis_target_engines=[eid],
+                                recommendation="Remove unextracted entity reference from hypothesis narrative."
+                            ))
+                            break
+        return issues, warnings
+
+    def _check_stale_engine_outputs(
+        self,
+        engine_outputs: Dict[str, Any],
+        target_analysis_version: int
+    ) -> tuple[List[VerificationIssue], List[str]]:
+        issues: List[VerificationIssue] = []
+        warnings: List[str] = []
+        for eid, rec in engine_outputs.items():
+            r_ver = getattr(rec, "analysis_version", target_analysis_version)
+            if r_ver < target_analysis_version:
+                issues.append(VerificationIssue(
+                    check_id="STALE_ENGINE_OUTPUT",
+                    severity="CRITICAL",
+                    description=f"Stale output: Engine '{eid}' result is from analysis version {r_ver} (current is {target_analysis_version}).",
+                    affected_engines=[eid],
+                    reanalysis_target_engines=[eid],
+                    recommendation="Re-run engine under active analysis version."
+                ))
+        return issues, warnings
+
+    def _check_cross_case_evidence_refs(
+        self,
+        engine_output_map: Dict[str, List[Dict]],
+        valid_evidence_ids: Set[str]
+    ) -> tuple[List[VerificationIssue], List[str]]:
+        issues: List[VerificationIssue] = []
+        warnings: List[str] = []
+        for eid, outputs in engine_output_map.items():
+            for out in outputs:
+                for field_name in ("evidence_id", "supporting_evidence_citations", "cited_evidence", "evidence_ids"):
+                    raw = out.get(field_name)
+                    if not raw:
+                        continue
+                    refs = raw if isinstance(raw, list) else [raw]
+                    for ref in refs:
+                        ref_str = str(ref)
+                        if len(ref_str) == 36 and ref_str not in valid_evidence_ids:
+                            issues.append(VerificationIssue(
+                                check_id="CROSS_CASE_EVIDENCE_REFERENCE",
+                                severity="CRITICAL",
+                                description=f"Engine '{eid}' references foreign or nonexistent exhibit '{ref_str}'.",
+                                affected_engines=[eid],
+                                reanalysis_target_engines=[eid],
+                                recommendation="Remove cross-case evidence reference and restrict to active case exhibits."
+                            ))
+        return issues, warnings
+
+    def _check_evidence_modality_contradiction(
+        self,
+        engine_output_map: Dict[str, List[Dict]],
+        engine_outputs: Dict[str, Any]
+    ) -> tuple[List[VerificationIssue], List[str]]:
+        issues: List[VerificationIssue] = []
+        warnings: List[str] = []
+        x04_outs = engine_output_map.get("X04", [])
+        
+        has_fin_gap = any(
+            isinstance(g, dict) and "financial" in str(g.get("description", "")).lower() and "absent" in str(g.get("description", "")).lower()
+            for g in x04_outs
+        )
+        fi_succeeded = any(
+            rec and getattr(rec, "status", None) in ("SUCCESS", "PARTIAL")
+            for eid, rec in engine_outputs.items() if eid.startswith("FI")
+        )
+        if has_fin_gap and fi_succeeded:
+            issues.append(VerificationIssue(
+                check_id="EVIDENCE_MODALITY_CONTRADICTION",
+                severity="CRITICAL",
+                description="Hard state contradiction: X04 reports financial modality absent, but financial engines (FI01-FI06) completed successfully in the same run.",
+                affected_engines=["X04", "FI01", "FI02"],
+                reanalysis_target_engines=["X04"],
+                recommendation="Derive modality availability from authoritative AnalysisRunContext manifest."
+            ))
+        return issues, warnings
     # -----------------------------------------------------------------------
 
     def _check_evidence_refs(
@@ -501,6 +794,22 @@ def _determine_verdict(
     critical = [i for i in issues if i.severity == "CRITICAL"]
     high = [i for i in issues if i.severity == "HIGH"]
     medium = [i for i in issues if i.severity == "MEDIUM"]
+
+    hard_invariants = {
+        "CASE_SCOPE_MISMATCH",
+        "ANALYSIS_VERSION_MISMATCH",
+        "CORRELATION_COUNT_MISMATCH",
+        "UNKNOWN_ENTITY_REFERENCE",
+        "STALE_ENGINE_OUTPUT",
+        "CROSS_CASE_EVIDENCE_REFERENCE",
+        "EVIDENCE_MODALITY_CONTRADICTION",
+    }
+    hard_violations = [i for i in critical if i.check_id in hard_invariants]
+    if hard_violations:
+        return (
+            FinalVerificationDetermination.HARD_INTEGRITY_VIOLATION,
+            f"{len(hard_violations)} hard integrity violation(s) detected: {'; '.join(v.description for v in hard_violations)}. Report publication blocked.",
+        )
 
     if critical:
         return (

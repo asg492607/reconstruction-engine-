@@ -44,10 +44,12 @@ from fastapi.responses import FileResponse
 import os
 
 from app.department_engines.router import router as engines_router
+from app.knowledge.router import router as knowledge_router
 
 app.include_router(auth_router)
 app.include_router(cases_router)
 app.include_router(engines_router)
+app.include_router(knowledge_router)
 app.include_router(evidence_router)
 app.include_router(observations_router)
 app.include_router(entities_router)

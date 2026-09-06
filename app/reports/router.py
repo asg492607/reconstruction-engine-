@@ -25,7 +25,10 @@ async def generate_report(
     if not check_access(current_user, Action.GENERATE_REPORT, case=case):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied to generate report")
 
-    report = await generate_case_report(db, case, current_user)
+    try:
+        report = await generate_case_report(db, case, current_user)
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
     await record_audit_log(
         db=db,
         action="REPORT_GENERATED",

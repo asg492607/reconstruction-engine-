@@ -10,38 +10,87 @@ from app.models.entities import (
 async def generate_case_report(
     db: AsyncSession,
     case: Case,
-    user: User
+    user: User,
+    analysis_version: Optional[int] = None
 ) -> Report:
-    # 1. Fetch all data for the case
+    target_version = analysis_version if analysis_version is not None else (case.current_version or 1)
+
+    # 0. Check Final Verification Gate before publishing report
+    from app.department_engines.dispatcher import get_case_latest_verification
+    latest_ver = get_case_latest_verification(case.id)
+    if latest_ver and latest_ver.get("determination") in ("HARD_INTEGRITY_VIOLATION", "REANALYSIS_REQUIRED"):
+        raise ValueError(
+            f"Report publication blocked by Final Verification Engine ({latest_ver.get('determination')}): {latest_ver.get('summary')}"
+        )
+
+    # 1. Fetch data strictly for the case and target analysis_version
     ev_res = await db.execute(select(Evidence).where(Evidence.case_id == case.id))
     evidence_items = ev_res.scalars().all()
 
-    obs_res = await db.execute(select(Observation).where(Observation.case_id == case.id))
+    obs_res = await db.execute(
+        select(Observation).where(
+            Observation.case_id == case.id,
+            Observation.analysis_version == target_version
+        )
+    )
     observations = obs_res.scalars().all()
 
-    ent_res = await db.execute(select(CandidateEntity).where(CandidateEntity.case_id == case.id))
+    ent_res = await db.execute(
+        select(CandidateEntity).where(
+            CandidateEntity.case_id == case.id,
+            CandidateEntity.analysis_version == target_version
+        )
+    )
     entities = ent_res.scalars().all()
 
-    links_res = await db.execute(select(CandidateEntityLink).where(CandidateEntityLink.case_id == case.id))
+    links_res = await db.execute(
+        select(CandidateEntityLink).where(
+            CandidateEntityLink.case_id == case.id,
+            CandidateEntityLink.analysis_version == target_version
+        )
+    )
     links = links_res.scalars().all()
 
-    claims_res = await db.execute(select(Claim).where(Claim.case_id == case.id))
+    claims_res = await db.execute(
+        select(Claim).where(
+            Claim.case_id == case.id,
+            Claim.analysis_version == target_version
+        )
+    )
     claims = claims_res.scalars().all()
 
     corr_res = await db.execute(
         select(CorrelatedTimelineEvent)
-        .where(CorrelatedTimelineEvent.case_id == case.id)
+        .where(
+            CorrelatedTimelineEvent.case_id == case.id,
+            CorrelatedTimelineEvent.analysis_version == target_version
+        )
         .order_by(CorrelatedTimelineEvent.event_time)
     )
     events = corr_res.scalars().all()
 
-    hyp_res = await db.execute(select(Hypothesis).where(Hypothesis.case_id == case.id))
+    hyp_res = await db.execute(
+        select(Hypothesis).where(
+            Hypothesis.case_id == case.id,
+            Hypothesis.analysis_version == target_version
+        )
+    )
     hypotheses = hyp_res.scalars().all()
 
-    gap_res = await db.execute(select(GapConflict).where(GapConflict.case_id == case.id))
+    gap_res = await db.execute(
+        select(GapConflict).where(
+            GapConflict.case_id == case.id,
+            GapConflict.analysis_version == target_version
+        )
+    )
     gaps = gap_res.scalars().all()
 
-    ver_res = await db.execute(select(Verification).where(Verification.case_id == case.id))
+    ver_res = await db.execute(
+        select(Verification).where(
+            Verification.case_id == case.id,
+            Verification.analysis_version == target_version
+        )
+    )
     verifications = ver_res.scalars().all()
 
     # Determine report version
@@ -54,6 +103,7 @@ async def generate_case_report(
             "case_number": case.case_number,
             "case_id": case.id,
             "report_version": version_num,
+            "analysis_version": target_version,
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "generated_by_user_id": user.id,
             "status": case.status.value,
@@ -140,6 +190,7 @@ async def generate_case_report(
     report = Report(
         case_id=case.id,
         version=version_num,
+        analysis_version=target_version,
         report_data=report_payload,
         generated_by=user.id,
         generated_at=datetime.now(timezone.utc)

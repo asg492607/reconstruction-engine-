@@ -70,12 +70,21 @@ class KnowledgeService:
         db: AsyncSession,
         case_id: str,
         category: Optional[KnowledgeCategory] = None,
+        tag: Optional[str] = None,
     ) -> List[CaseKnowledgeItem]:
         stmt = select(CaseKnowledgeItem).where(CaseKnowledgeItem.case_id == case_id)
         if category:
             stmt = stmt.where(CaseKnowledgeItem.category == category)
         result = await db.execute(stmt)
-        return list(result.scalars().all())
+        items = list(result.scalars().all())
+        if tag:
+            items = [item for item in items if item.tags and tag in item.tags]
+        return items
+
+    async def get_item_by_id(self, db: AsyncSession, item_id: str) -> Optional[CaseKnowledgeItem]:
+        stmt = select(CaseKnowledgeItem).where(CaseKnowledgeItem.id == item_id)
+        result = await db.execute(stmt)
+        return result.scalar_one_or_none()
 
     async def delete_item(self, db: AsyncSession, item_id: str) -> bool:
         stmt = delete(CaseKnowledgeItem).where(CaseKnowledgeItem.id == item_id)
