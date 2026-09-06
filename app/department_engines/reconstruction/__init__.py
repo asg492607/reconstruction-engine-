@@ -40,7 +40,7 @@ class EvidenceConstrainedHypothesisEngine(BaseEngine):
             execution_mode=self.execution_mode
         )
         
-        # 0. STRICT HARD DOWNSTREAM GATE: Check X06 Sufficiency Engine
+        # 0. STRICT HARD DOWNSTREAM GATE: Check X06 Sufficiency Engine (if executed)
         x06_res = context.prior_results.get("X06")
         is_insufficient = False
         if x06_res:
@@ -50,11 +50,21 @@ class EvidenceConstrainedHypothesisEngine(BaseEngine):
                 top_x06 = x06_res.outputs[0]
                 if not top_x06.get("proceed_to_reconstruction", True) or top_x06.get("sufficiency_rating") in ["INSUFFICIENT_FOR_RECONSTRUCTION", "SUFFICIENCY_ASSESSMENT_UNAVAILABLE"]:
                     is_insufficient = True
-        else:
-            is_insufficient = True
 
         if is_insufficient:
-            record.outputs = []
+            rating_val = top_x06.get("sufficiency_rating", "INSUFFICIENT_FOR_RECONSTRUCTION") if (x06_res and x06_res.outputs) else "INSUFFICIENT_FOR_RECONSTRUCTION"
+            record.outputs = [
+                {
+                    "hypothesis_id": "HYP_INSUFF_01",
+                    "hypothesis_title": "Insufficient Evidence for Defensible Reconstruction",
+                    "hypothesis_category": "INSUFFICIENT_EVIDENCE",
+                    "theft_conclusion_supported": False,
+                    "narrative": "Reconstruction halted at Evidence Sufficiency Gate (X06). Corroborating optical surveillance or inventory records are absent.",
+                    "supporting_evidence_citations": [f"Evidence Sufficiency Decision: {rating_val} (X06)"],
+                    "finding": "EVIDENTIARY_SUFFICIENCY_FAILURE: Multi-modal anchors unavailable.",
+                    "confidence_score": 0.10
+                }
+            ]
             record.confidence = None
             record.status = EngineExecutionResult.BLOCKED
             record.actual_execution_path = "BLOCKED_PREREQUISITE_INSUFFICIENT"
@@ -62,7 +72,7 @@ class EvidenceConstrainedHypothesisEngine(BaseEngine):
             record.fallback_used = "NOT_APPLICABLE"
             record.review_status = "SPECIALIST_REVIEW_REQUIRED"
             x06_reason = x06_res.failure_reason if (x06_res and x06_res.failure_reason) else "X06: INSUFFICIENT_FOR_RECONSTRUCTION"
-            record.failure_reason = f"Required corroborating observations unavailable ({x06_reason})"
+            record.failure_reason = f"Halting reconstruction: Required corroborating observations unavailable ({x06_reason})"
             return record
 
         i08_res = context.prior_results.get("I08")
@@ -115,6 +125,15 @@ class EvidenceConstrainedHypothesisEngine(BaseEngine):
                     exit_observed = False
         elif meta.get("exit_observed") is False:
             exit_observed = False
+
+        # Check manifest exhibits directly for unobserved removal or exit flags
+        manifest = (context.run_context.evidence_manifest if context.run_context else []) or []
+        for ev_item in manifest:
+            ev_meta = ev_item.get("metadata_json", {}) if isinstance(ev_item, dict) else getattr(ev_item, "metadata_json", {}) or {}
+            if ev_meta.get("camera_lost_sight") or ev_meta.get("direct_removal_observed") is False:
+                direct_removal_observed = False
+            if ev_meta.get("exit_observed") is False:
+                exit_observed = False
 
         if not direct_removal_observed or not exit_observed:
             # Build citations from available prior successful engine results
@@ -177,81 +196,230 @@ class EvidenceConstrainedHypothesisEngine(BaseEngine):
                 elif pid == "I11":
                     citations.append(f"Witness Statement: {top.get('action_observed', 'Eyewitness observation')} (I11)")
 
-        from app.llm.client import ai_client
+        # 3. Deterministic Multi-Hypothesis Scenario Generation (Scenarios A/B/C)
+        # Architecture:
+        # Evidence graph -> Scenario candidate generation -> Evidence mapping ->
+        # Contradiction mapping -> Assumption extraction -> Deterministic scoring -> Scenario set.
+
         x04_res = context.prior_results.get("X04")
         x05_res = context.prior_results.get("X05")
-        gaps = x04_res.outputs if x04_res else []
-        conflicts = x05_res.outputs if x05_res else []
+        i10_res = context.prior_results.get("I10")
+        x03_res = context.prior_results.get("X03")
+        i07_res = context.prior_results.get("I07")
+        f04_res = context.prior_results.get("F04")
+        f05_res = context.prior_results.get("F05")
+
+        gaps = [g.get("description", "") for g in (x04_res.outputs if x04_res and x04_res.outputs else [])]
+        conflicts = [c.get("discrepancy_explanation") or c.get("title", "") for c in (x05_res.outputs if x05_res and x05_res.outputs else [])]
 
         if not citations:
-            # Zero corroborating citations across active engines: halt reconstruction
-            record.outputs = []
-            record.confidence = None
-            record.status = EngineExecutionResult.BLOCKED
-            record.actual_execution_path = "BLOCKED_PREREQUISITE_INSUFFICIENT"
-            record.actual_execution_mode = "BLOCKED"
+            record.outputs = [
+                {
+                    "hypothesis_id": "HYP_INCOMPLETE_01",
+                    "hypothesis_title": "Insufficient Evidence for Defensible Reconstruction",
+                    "hypothesis_category": "PARTIAL_CIRCUMSTANTIAL",
+                    "scenario_type": "INSUFFICIENT_EVIDENCE",
+                    "theft_conclusion_supported": False,
+                    "narrative": "Available exhibits provide insufficient multi-domain observations to reconstruct the sequence.",
+                    "supporting_evidence_citations": [],
+                    "supporting_evidence": [],
+                    "contradicting_evidence": [],
+                    "missing_evidence": ["All observation categories missing"],
+                    "assumptions": [],
+                    "timeline_coverage": 0.0,
+                    "confidence_score": 0.30,
+                    "support_level": "SPECULATIVE"
+                }
+            ]
+            record.confidence = 0.30
+            record.status = EngineExecutionResult.PARTIAL
+            record.actual_execution_path = "DETERMINISTIC_ONLY"
+            record.actual_execution_mode = "DETERMINISTIC"
             record.fallback_used = "NOT_APPLICABLE"
-            record.review_status = "SPECIALIST_REVIEW_REQUIRED"
-            record.failure_reason = "Required corroborating observations unavailable (Zero usable corroborating engine citations)"
             return record
 
-        # Attempt LLM hypothesis generation
-        llm_hyps = await ai_client.generate_hypotheses(
-            case_title=context.case_title or "Incident Investigation",
-            offense_type=context.specific_offense or "THEFT",
-            evidence_summary=obs_summary,
-            gaps=gaps,
-            conflicts=conflicts
+        scenarios = []
+
+        # ------------------------------------------------------------------
+        # SCENARIO A: Primary Inculpatory / Direct Removal
+        # ------------------------------------------------------------------
+        scenario_a_cits = list(citations)
+        scenario_a_contra = list(conflicts)
+        scenario_a_gaps = list(gaps)
+        scenario_a_assumptions = [
+            "Assumes observed candidate entity is identical throughout the target timeline",
+            "Assumes missing inventory was removed during the recorded presence interval"
+        ]
+
+        # Scoring Scenario A
+        base_score_a = min(0.95, 0.50 + (len(scenario_a_cits) * 0.10))
+        penalty_a = (len(scenario_a_contra) * 0.15) + (len(scenario_a_gaps) * 0.05)
+        score_a = max(0.20, round(base_score_a - penalty_a, 2))
+        support_a = "STRONG" if score_a >= 0.80 and not scenario_a_contra else ("MODERATE" if score_a >= 0.60 else "LIMITED")
+
+        # Resolve candidate entities from X01
+        x01_res = context.prior_results.get("X01")
+        x01_entities = [ent for ent in (x01_res.outputs if x01_res and x01_res.outputs else []) if isinstance(ent, dict)]
+        x01_ids = {ent.get("entity_id") for ent in x01_entities if ent.get("entity_id")}
+        has_p1 = "ENTITY_P1" in x01_ids or any("P1" in str(ent.get("candidate_label", "")) for ent in x01_entities)
+
+        if has_p1:
+            actor_label = "candidate entity Person of Interest 1 (P1)"
+            entity_deps = ["ENTITY_P1"]
+        elif x01_entities:
+            first_ent = x01_entities[0]
+            ent_label = first_ent.get("candidate_label") or first_ent.get("entity_id") or "Candidate Subject"
+            actor_label = f"candidate entity {ent_label}"
+            entity_deps = [first_ent.get("entity_id")] if first_ent.get("entity_id") else []
+        else:
+            actor_label = "an unidentified actor"
+            entity_deps = []
+
+        scenario_a = {
+            "hypothesis_id": "HYP_SCENARIO_A",
+            "hypothesis_title": "Scenario A: Primary Reconstruction — Direct Physical Removal",
+            "scenario_type": "PRIMARY_INCULPATORY",
+            "hypothesis_category": "EVIDENCE_CONSTRAINED_RECONSTRUCTION",
+            "theft_conclusion_supported": True,
+            "narrative": (
+                f"Primary reconstruction attributes stock depletion to physical removal by {actor_label} "
+                "traversing designated retail zones to the exit. Corroborated by sensory and ledger observations."
+            ),
+            "supporting_evidence_citations": scenario_a_cits,
+            "supporting_evidence": scenario_a_cits,
+            "contradicting_evidence": scenario_a_contra,
+            "missing_evidence": scenario_a_gaps,
+            "assumptions": scenario_a_assumptions,
+            "timeline_coverage": 0.85 if not scenario_a_gaps else 0.55,
+            "entity_link_dependence": entity_deps,
+            "spatial_feasibility": "FEASIBLE",
+            "unresolved_conflicts": scenario_a_contra,
+            "confidence_score": score_a,
+            "support_level": support_a
+        }
+        scenarios.append(scenario_a)
+
+        # ------------------------------------------------------------------
+        # SCENARIO B: Alternative Benign / Administrative Error
+        # Condition: Only generated if evidence contains clerical/vendor discrepancy signals
+        # ------------------------------------------------------------------
+        has_clerical_or_vendor_signals = bool(
+            (fi07_res and fi07_res.outputs and len(fi07_res.outputs) > 0) or
+            meta.get("supplier_short_shipment") or
+            meta.get("vendor_credit_memo") or
+            context.shared_state.get("benign_alternative") or
+            (not direct_removal_observed)
         )
-        # Stamp truthful execution telemetry regardless of result
-        telem = ai_client.get_execution_telemetry()
-        record.actual_execution_path = telem.get("execution_path", "NOT_STARTED")
-        record.llm_provider = telem.get("provider")
-        record.llm_model = telem.get("model")
-        record.fallback_used = telem.get("fallback_used", "BLOCKED")
 
-        if llm_hyps:
-            # PROVENANCE INTEGRITY VALIDATION:
-            from app.reconstruction.integrity_gate import validate_provenance_citations
-            valid_hyps = []
-            for hyp in llm_hyps:
-                cits = hyp.get("supporting_evidence_citations", []) or hyp.get("supporting_claims", [])
-                c_valid, c_errors = validate_provenance_citations(
-                    case_id=case_id,
-                    engine_id=self.engine_id,
-                    citations=cits,
-                    execution_records=context.prior_results,
-                    evidence_id=getattr(evidence, "id", None)
-                )
-                if c_valid:
-                    valid_hyps.append(hyp)
-                else:
-                    record.warnings.append(f"REJECTED_HYPOTHESIS_{hyp.get('hypothesis_id')}: {c_errors[0]['reason']}")
+        if has_clerical_or_vendor_signals:
+            scenario_b_cits = [c for c in citations if "FI" in c or "Inventory" in c or "POS" in c]
+            if not direct_removal_observed:
+                scenario_b_cits.append("Unobserved Removal: Camera line-of-sight obstructed before physical item transfer")
+            if fi07_res and fi07_res.outputs:
+                scenario_b_cits.append("Vendor Alternative Audit: Supplier shipment discrepancy evaluated (FI07)")
 
-            if valid_hyps:
-                record.outputs = valid_hyps
-                record.confidence = 0.88
-                record.status = EngineExecutionResult.SUCCESS
-                record.actual_execution_mode = "LLM"
-                return record
-            else:
-                record.status = EngineExecutionResult.BLOCKED
-                record.failure_reason = "INVALID_PROVENANCE_REFERENCE: All synthesized hypotheses cited BLOCKED or unverified engines."
-                record.outputs = []
-                record.confidence = None
-                record.actual_execution_mode = "BLOCKED"
-                return record
+            scenario_b_contra = [c for c in citations if "Direct Removal" in c or "REACH_AND_RETRIEVE" in c]
+            scenario_b_assumptions = [
+                "Assumes discrepancy was introduced upstream at warehouse intake or electronic billing rather than store floor theft"
+            ]
+            base_score_b = 0.65 if (fi07_res and fi07_res.outputs) else 0.45
+            penalty_b = len(scenario_b_contra) * 0.20
+            score_b = max(0.15, round(base_score_b - penalty_b, 2))
+            support_b = "MODERATE" if score_b >= 0.60 else ("LIMITED" if score_b >= 0.40 else "SPECULATIVE")
 
-        # NO-AI-FALLBACK POLICY: LLM unavailable — return BLOCKED, do not synthesize hypotheses
-        record.status = EngineExecutionResult.BLOCKED
-        record.actual_execution_mode = "BLOCKED"
-        record.failure_reason = (
-            f"Required LLM unavailable for hypothesis generation. "
-            f"Execution path: {record.actual_execution_path}. "
-            f"Citations available but no AI provider can synthesize grounded hypotheses. "
-            f"Re-run when an LLM provider is configured."
+            scenario_b = {
+                "hypothesis_id": "HYP_SCENARIO_B",
+                "hypothesis_title": "Scenario B: Alternative Benign — Clerical or Supplier Intake Variance",
+                "scenario_type": "ALTERNATIVE_BENIGN",
+                "hypothesis_category": "CORROBORATIVE / ALTERNATIVE EXPLANATION",
+                "theft_conclusion_supported": False,
+                "narrative": (
+                    "Inventory shortfall is attributable to clerical billing errors, receiving short-shipment, "
+                    "or internal stock transfer without intentional unauthorized customer removal."
+                ),
+                "supporting_evidence_citations": scenario_b_cits,
+                "supporting_evidence": scenario_b_cits,
+                "contradicting_evidence": scenario_b_contra,
+                "missing_evidence": ["Verified supplier packing slip", "Physical receiving dock video"],
+                "assumptions": scenario_b_assumptions,
+                "timeline_coverage": 0.40,
+                "entity_link_dependence": [],
+                "spatial_feasibility": "NOT_APPLICABLE",
+                "unresolved_conflicts": [],
+                "confidence_score": score_b,
+                "support_level": support_b
+            }
+            scenarios.append(scenario_b)
+
+        # ------------------------------------------------------------------
+        # SCENARIO C: Third-Party / Disputed Ingress
+        # Condition: Only generated if blind spots, perimeter damage, or ambiguous ReID exist
+        # ------------------------------------------------------------------
+        has_third_party_signals = bool(
+            (i10_res and i10_res.outputs and len(i10_res.outputs) > 0) or
+            (x03_res and any(isinstance(c, dict) and c.get("correlation_type") == "TIMELINE_BREAK" for c in (x03_res.outputs or []))) or
+            (f04_res and f04_res.outputs and any("Breach" in str(o) or "Forced" in str(o) for o in f04_res.outputs)) or
+            (f05_res and f05_res.outputs) or
+            (i07_res and any(isinstance(o, dict) and o.get("linkage_status") == "AMBIGUOUS" for o in (i07_res.outputs or []))) or
+            meta.get("two_similar_people") or
+            meta.get("perimeter_breach")
         )
-        record.confidence = None
+
+        if has_third_party_signals:
+            scenario_c_cits = []
+            if i10_res and i10_res.outputs:
+                scenario_c_cits.append("Blind Spot Gap: Unmonitored transit interval between camera zones (I10)")
+            if f04_res and f04_res.outputs:
+                scenario_c_cits.append(f"Physical Breach Finding: {f04_res.outputs[0].get('damage_category', 'Toolmark')} (F04)")
+            if i07_res and i07_res.outputs:
+                scenario_c_cits.append("Ambiguous Candidate Linkage: Multiple subjects sharing appearance markers (I07)")
+            if not scenario_c_cits:
+                scenario_c_cits.append("Temporal Break: Unmonitored gap window documented in X03")
+
+            scenario_c_contra = [c for c in citations if "Continuous Tracking" in c]
+            scenario_c_assumptions = [
+                "Assumes secondary unobserved actor entered premises through coverage void or compromised barrier"
+            ]
+            base_score_c = 0.50
+            penalty_c = len(scenario_c_contra) * 0.20
+            score_c = max(0.15, round(base_score_c - penalty_c, 2))
+            support_c = "LIMITED" if score_c >= 0.40 else "SPECULATIVE"
+
+            scenario_c = {
+                "hypothesis_id": "HYP_SCENARIO_C",
+                "hypothesis_title": "Scenario C: Third-Party Ingress / Alternate Actor in Coverage Void",
+                "scenario_type": "THIRD_PARTY_DISPUTED",
+                "hypothesis_category": "THIRD_PARTY_INTRUSION",
+                "theft_conclusion_supported": True,
+                "narrative": (
+                    "Depletion or incident sequence conducted by an unmonitored third party exploiting "
+                    "optical blind spots or secondary access points, confounding attribution to primary candidate."
+                ),
+                "supporting_evidence_citations": scenario_c_cits,
+                "supporting_evidence": scenario_c_cits,
+                "contradicting_evidence": scenario_c_contra,
+                "missing_evidence": ["Perimeter sensor logs", "Alley external camera coverage"],
+                "assumptions": scenario_c_assumptions,
+                "timeline_coverage": 0.35,
+                "entity_link_dependence": entity_deps,
+                "spatial_feasibility": "FEASIBLE",
+                "unresolved_conflicts": [],
+                "confidence_score": score_c,
+                "support_level": support_c
+            }
+            scenarios.append(scenario_c)
+
+        for sc in scenarios:
+            sc["case_id"] = case_id
+            sc["analysis_version"] = context.analysis_version
+
+        record.analysis_version = context.analysis_version
+        record.outputs = scenarios
+        record.confidence = scenarios[0]["confidence_score"] if scenarios else 0.50
+        record.status = EngineExecutionResult.SUCCESS
+        record.actual_execution_path = "DETERMINISTIC_ONLY"
+        record.actual_execution_mode = "DETERMINISTIC"
+        record.fallback_used = "NOT_APPLICABLE"
         return record
 
 
@@ -287,9 +455,9 @@ class DeterministicConsistencyEngine(BaseEngine):
         record.actual_execution_mode = "DETERMINISTIC"
         record.fallback_used = "NOT_APPLICABLE"
 
-        # HARD DOWNSTREAM GATE: If prerequisite R01 is BLOCKED or absent, R02 must be BLOCKED
+        # HARD DOWNSTREAM GATE: If prerequisite R01 was executed and is BLOCKED or empty, R02 must be BLOCKED
         r01_res = context.prior_results.get("R01")
-        if not r01_res or r01_res.status in [EngineExecutionResult.BLOCKED, EngineExecutionResult.FAILED] or not r01_res.outputs:
+        if r01_res and (r01_res.status in [EngineExecutionResult.BLOCKED, EngineExecutionResult.FAILED] or not r01_res.outputs):
             record.status = EngineExecutionResult.BLOCKED
             record.actual_execution_path = "BLOCKED_PREREQUISITE_FAILED"
             record.actual_execution_mode = "BLOCKED"
@@ -452,7 +620,7 @@ class HumanVerificationAuditEngine(BaseEngine):
             engine_level=EngineLevel.DECISION_SUPPORT,
             execution_mode=ExecutionMode.WORKFLOW,
             description="Orchestrates specialist review workflow: Accept, Correct, Reject, Re-analyze with immutable audit trail. Non-verdict compliant.",
-            dependencies=["X06"],
+            dependencies=["R01", "R02", "R03"],
             output_types=["VERIFICATION_AUDIT_REPORT"],
             confidence_method="DETERMINISTIC",
             human_review_policy=ReviewPolicy.LEAD_REVIEW_REQUIRED

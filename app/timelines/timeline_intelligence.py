@@ -153,16 +153,36 @@ class SourceLocalTimelineBuilder:
                 if not isinstance(item, dict):
                     continue
                 ts = _parse_timestamp(
-                    item.get("timestamp") or item.get("observed_time") or item.get("event_time")
+                    item.get("timestamp") or item.get("observed_time") or item.get("event_time") or item.get("stated_time")
                 )
+                desc = (
+                    item.get("description")
+                    or item.get("label")
+                    or item.get("action_observed")
+                    or item.get("event_name")
+                    or item.get("observation")
+                    or ""
+                )
+                if not desc:
+                    if "transaction_id" in item:
+                        desc = f"POS Transaction {item.get('transaction_id')} terminal {item.get('terminal_id', 'TERM')}"
+                    elif "sku" in item:
+                        desc = f"Stock item SKU {item.get('sku')} variance: physical {item.get('physical_count')}, expected {item.get('expected_stock_count')}"
+                    elif "finding" in item:
+                        desc = str(item.get("finding"))
+                    elif "actor_described" in item:
+                        desc = f"Witness statement: observed {item.get('actor_described')}"
+                    else:
+                        desc = f"{src_type} record from {source_id[:8]}"
+
                 events.append(SourceEvent(
-                    event_id=f"{engine_id}_{idx}",
+                    event_id=item.get("event_id") or f"{engine_id}_{idx}",
                     source_id=source_id,
                     source_type=src_type,
                     timestamp=ts,
                     event_type=item.get("observation_type") or item.get("event_type") or engine_id,
-                    description=item.get("description") or item.get("observation") or "",
-                    entity_refs=item.get("entity_refs", []),
+                    description=desc,
+                    entity_refs=item.get("entity_refs", []) or ([item.get("actor_id")] if item.get("actor_id") else []),
                     raw_data=item,
                 ))
 
@@ -504,7 +524,13 @@ class TimelineIntelligence:
                 src: [
                     {
                         "event_id": e.source_event.event_id,
+                        "source_id": e.source_event.source_id,
+                        "source_type": e.source_event.source_type,
+                        "observed_time": e.source_event.timestamp.isoformat() if e.source_event.timestamp else None,
                         "normalized_timestamp": e.normalized_timestamp.isoformat() if e.normalized_timestamp else None,
+                        "event_type": e.source_event.event_type,
+                        "description": e.source_event.description,
+                        "entity_refs": e.source_event.entity_refs,
                         "drift_applied_seconds": e.drift_applied_seconds,
                         "confidence": e.confidence,
                         "normalization_note": e.normalization_note,
