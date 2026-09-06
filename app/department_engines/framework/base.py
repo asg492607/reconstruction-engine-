@@ -1,9 +1,13 @@
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from enum import Enum
-from typing import List, Dict, Any, Optional
+from typing import TYPE_CHECKING, List, Dict, Any, Optional
 import uuid
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+if TYPE_CHECKING:
+    from app.department_engines.framework.trigger_manager import EngineTriggerCondition
+    from app.department_engines.framework.governance import EngineResourceBudget
 
 
 class EngineLevel(str, Enum):
@@ -17,6 +21,7 @@ class ExecutionMode(str, Enum):
     DETERMINISTIC = "DETERMINISTIC"
     MODEL = "MODEL"
     LLM = "LLM"
+    REAL_LLM = "REAL_LLM"   # Alias used in tests / telemetry to signal live LLM invocation
     HYBRID = "HYBRID"
     WORKFLOW = "WORKFLOW"
 
@@ -29,15 +34,19 @@ class ReviewPolicy(str, Enum):
 
 
 class EngineExecutionResult(str, Enum):
-    SUCCESS = "SUCCESS"                      # Full output generated satisfying all confidence thresholds
-    PARTIAL = "PARTIAL"                      # Some observations generated; partial occlusion or corruption noted
-    NO_USABLE_OUTPUT = "NO_USABLE_OUTPUT"    # Media processed successfully but no target features detected
-    BLOCKED = "BLOCKED"                      # Prerequisite engine failed or quality below minimum threshold
-    FAILED = "FAILED"                        # Model exception, timeout, or processing failure
-    SKIPPED = "SKIPPED"                      # Engine not applicable under current Analysis Plan
+    SUCCESS             = "SUCCESS"              # Full output generated satisfying all confidence thresholds
+    PARTIAL             = "PARTIAL"              # Some observations generated; partial occlusion or corruption noted
+    NO_USABLE_OUTPUT    = "NO_USABLE_OUTPUT"     # Media processed successfully but no target features detected
+    BLOCKED             = "BLOCKED"              # Prerequisite engine failed or quality below minimum threshold
+    FAILED              = "FAILED"               # Model exception, timeout, or processing failure
+    SKIPPED             = "SKIPPED"              # Engine not applicable under current Analysis Plan
+    SKIPPED_NO_INPUT    = "SKIPPED_NO_INPUT"     # Phase 1: Required evidence modality cleanly absent
+    TIME_LIMIT_EXCEEDED = "TIME_LIMIT_EXCEEDED"  # Phase 8: Wall-clock budget exhausted before completion
 
 
 class EngineDefinition(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     engine_id: str
     engine_name: str
     engine_version: str = "1.0.0"
@@ -54,6 +63,9 @@ class EngineDefinition(BaseModel):
     human_review_policy: ReviewPolicy = ReviewPolicy.AUTO_ACCEPT
     quality_thresholds: Dict[str, Any] = Field(default_factory=dict)
     failure_codes: List[str] = Field(default_factory=list)
+    # Phase 1 – Condition Trigger Manager fields
+    trigger_condition: Optional[Any] = Field(default=None, exclude=True)   # EngineTriggerCondition
+    resource_budget: Optional[Any] = Field(default=None, exclude=True)     # EngineResourceBudget
 
 
 class EngineContext(BaseModel):

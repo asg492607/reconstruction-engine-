@@ -23,7 +23,7 @@ async def call_gemini(
         logger.warning("No GEMINI_API_KEY configured; returning None.")
         return None
 
-    model = settings.LLM_MODEL or "gemini-1.5-flash"
+    model = settings.LLM_MODEL or "gemini-2.0-flash-lite"
 
     payload: Dict[str, Any] = {
         "contents": [

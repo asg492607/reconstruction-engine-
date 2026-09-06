@@ -15,6 +15,30 @@ async def list_registered_engines():
     defs = engine_registry.list_all()
     return [d.model_dump() for d in defs]
 
+@router.get("/analytics/performance", response_model=Dict[str, Any])
+async def get_engine_performance_analytics(case_id: Optional[str] = Query(default=None)):
+    """
+    Phase 10 — Engine Telemetry Analytics.
+
+    Returns aggregated performance statistics across all analysis runs.
+    If `case_id` is provided, scopes to a single case.
+    Includes per-engine success/blocked/failed rates, average execution time,
+    confidence distribution, output gate rejections, and top blocked chains.
+    """
+    from app.department_engines.dispatcher import _CASE_EXECUTION_RECORDS, _CASE_EXECUTION_HISTORY
+    from app.department_engines.telemetry_analytics import engine_analytics
+
+    if case_id:
+        return engine_analytics.compute_case_report(
+            execution_records=_CASE_EXECUTION_RECORDS,
+            run_history=_CASE_EXECUTION_HISTORY,
+            case_id=case_id,
+        )
+    return engine_analytics.compute_global_report(
+        execution_records=_CASE_EXECUTION_RECORDS,
+        run_history=_CASE_EXECUTION_HISTORY,
+    )
+
 @router.get("/{engine_id}", response_model=Dict[str, Any])
 async def get_engine_definition(engine_id: str):
     """Retrieve full definition for a specific engine."""

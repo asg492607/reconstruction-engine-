@@ -436,12 +436,14 @@ class ConflictDiscrepancyEngine(BaseEngine):
         else:
             unavailable_inputs.append("X02 chronology")
 
-        if i06_res and i06_res.outputs and i06_res.status in (EngineExecutionResult.SUCCESS, EngineExecutionResult.PARTIAL):
+        i06_status = getattr(i06_res, "status", EngineExecutionResult.SUCCESS)
+        if i06_res and i06_res.outputs and i06_status in (EngineExecutionResult.SUCCESS, EngineExecutionResult.PARTIAL):
             available_inputs.append("I06 CCTV attributes")
         else:
             unavailable_inputs.append("I06 CCTV attributes")
 
-        if i11_res and i11_res.outputs and i11_res.status in (EngineExecutionResult.SUCCESS, EngineExecutionResult.PARTIAL):
+        i11_status = getattr(i11_res, "status", EngineExecutionResult.SUCCESS)
+        if i11_res and i11_res.outputs and i11_status in (EngineExecutionResult.SUCCESS, EngineExecutionResult.PARTIAL):
             available_inputs.append("I11 witness extraction")
         else:
             unavailable_inputs.append("I11 witness extraction")

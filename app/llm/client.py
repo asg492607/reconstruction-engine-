@@ -37,7 +37,7 @@ class AIClient:
         if keys:
             return {
                 "provider": "gemini",
-                "model": settings.LLM_MODEL or "gemini-1.5-flash",
+                "model": settings.LLM_MODEL or "gemini-2.0-flash-lite",
                 "configured": True,
                 "key_count": len(keys)
             }
@@ -78,7 +78,7 @@ class AIClient:
         if not keys:
             return None
 
-        model = settings.LLM_MODEL or "gemini-1.5-flash"
+        model = settings.LLM_MODEL or "gemini-2.0-flash-lite"
         payload: Dict[str, Any] = {
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {

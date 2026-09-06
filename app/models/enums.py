@@ -157,14 +157,23 @@ class HypothesisStatus(str, Enum):
     DISMISSED = "DISMISSED"
 
 class GapConflictType(str, Enum):
+    # Legacy single catch-all (retained for backward compat)
     GAP = "GAP"
-    HARD_CONTRADICTION = "HARD_CONTRADICTION"
-    SOFT_DISCREPANCY = "SOFT_DISCREPANCY"
-    CORROBORATIVE_DISCREPANCY = "CORROBORATIVE_DISCREPANCY"
-    SOURCE_DISAGREEMENT = "SOURCE_DISAGREEMENT"
-    TEMPORAL_DISCREPANCY = "TEMPORAL_DISCREPANCY"
-    WITNESS_CONFLICT = "WITNESS_CONFLICT"
-    UNCERTAINTY = "UNCERTAINTY"
+    # Phase 4 — Six canonical gap categories
+    MISSING_EVIDENCE_GAP = "MISSING_EVIDENCE_GAP"   # Required evidence never provided
+    COVERAGE_GAP         = "COVERAGE_GAP"           # Evidence exists but blind spot in space/time
+    OBSERVATION_GAP      = "OBSERVATION_GAP"        # Evidence exists but subject/event not observable
+    TEMPORAL_GAP         = "TEMPORAL_GAP"           # Timestamps irreconcilable / clock drift / missing
+    ENTITY_GAP           = "ENTITY_GAP"             # Event exists but cannot be linked to an entity
+    CORRELATION_GAP      = "CORRELATION_GAP"        # Observations present but cannot safely connect
+    # Conflict classes (unchanged)
+    HARD_CONTRADICTION       = "HARD_CONTRADICTION"
+    SOFT_DISCREPANCY         = "SOFT_DISCREPANCY"
+    CORROBORATIVE_DISCREPANCY= "CORROBORATIVE_DISCREPANCY"
+    SOURCE_DISAGREEMENT      = "SOURCE_DISAGREEMENT"
+    TEMPORAL_DISCREPANCY     = "TEMPORAL_DISCREPANCY"
+    WITNESS_CONFLICT         = "WITNESS_CONFLICT"
+    UNCERTAINTY              = "UNCERTAINTY"
 
 class Significance(str, Enum):
     CRITICAL = "CRITICAL"

@@ -1,7 +1,8 @@
+import asyncio
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Set
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -15,6 +16,8 @@ from app.department_engines.framework.base import (
     EngineExecutionResult,
     ExecutionMode
 )
+from app.department_engines.framework.governance import resource_governor
+from app.department_engines.framework.output_gate import output_gate, GateDecision
 from app.observations.service import create_observation
 
 logger = logging.getLogger(__name__)
@@ -46,16 +49,23 @@ async def get_case_analysis_plan(db: AsyncSession, case: Case) -> DynamicAnalysi
     )
     return plan
 
-async def execute_case_analysis_plan(
+async def run_case_analysis(
     db: AsyncSession,
     case: Case,
     target_engine_ids: Optional[List[str]] = None,
     user_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Executes the dynamic analysis plan across the DAG sequence.
-    Handles exhibit-level analysis followed by cross-domain intelligence (X01–X06)
-    and reconstruction (R01–R04).
+    Phase 2 — Unified Case Analysis Operation.
+
+    One click executes whatever is currently supportable:
+      - Tier 1-5 engines always run based on available evidence
+      - Tier 6 (R01-R04) gated ONLY by X06 sufficiency, not by absence of other outputs
+      - Final Verification Engine (Phase 7) runs after all engines complete
+      - Output Gate (Phase 6) applied post-execution on MODEL/LLM/HYBRID engines
+      - Resource Governor (Phase 8) enforces per-engine time budgets
+
+    Legacy alias: execute_case_analysis_plan → run_case_analysis
     """
     stmt = select(Evidence).where(Evidence.case_id == case.id)
     res = await db.execute(stmt)
@@ -168,6 +178,25 @@ async def execute_case_analysis_plan(
                     actual_execution_mode="BLOCKED",
                     failure_reason=reason,
                     outputs=[]
+                )
+                context.prior_results[eid] = record
+                execution_records.append(record)
+                continue
+
+        # Phase 8: Governance — check objective relevance for optional engines
+        if eid in plan.optional_engines:
+            if resource_governor.should_skip_for_objective(
+                eid, case.investigative_objectives or []
+            ):
+                record = EngineExecutionRecord(
+                    case_id=case.id,
+                    engine_id=eid,
+                    engine_version=eng.definition.engine_version,
+                    execution_mode=eng.definition.execution_mode,
+                    status=EngineExecutionResult.SKIPPED_NO_INPUT,
+                    actual_execution_path="SKIPPED_NOT_REQUIRED",
+                    actual_execution_mode="SKIPPED",
+                    failure_reason="Skipped: No investigative objective matches engine relevance."
                 )
                 context.prior_results[eid] = record
                 execution_records.append(record)
@@ -308,6 +337,19 @@ async def execute_case_analysis_plan(
                 record.grounding_sources = ["Case Exhibit Manifest"]
             else:
                 record.grounding_sources = []
+
+        # Phase 6: Output Gate — apply 5-stage validation for AI/Model/Hybrid engines
+        if record.execution_mode in (
+            ExecutionMode.MODEL, ExecutionMode.LLM,
+            ExecutionMode.REAL_LLM, ExecutionMode.HYBRID
+        ) and record.status not in (
+            EngineExecutionResult.BLOCKED, EngineExecutionResult.FAILED,
+            EngineExecutionResult.SKIPPED, EngineExecutionResult.SKIPPED_NO_INPUT
+        ):
+            valid_ev_ids: Set[str] = {ev.id for ev in evidence_list}
+            gate_result = output_gate.evaluate(record, valid_evidence_ids=valid_ev_ids)
+            if not gate_result.passed:
+                record = output_gate.apply_decision(record, gate_result)
 
         context.prior_results[eid] = record
         execution_records.append(record)
@@ -451,6 +493,23 @@ async def execute_case_analysis_plan(
     }
     run_history.append(run_snapshot)
 
+    # Phase 7: Final Verification Engine — independent technical audit
+    try:
+        from app.reconstruction.final_verification_engine import final_verification_engine
+        valid_ev_ids_for_fve: Set[str] = {ev.id for ev in evidence_list}
+        fve_result = final_verification_engine.verify(
+            engine_outputs=context.prior_results,
+            valid_evidence_ids=valid_ev_ids_for_fve,
+            case_id=case.id
+        )
+        final_verification = fve_result.to_dict()
+    except Exception as fve_err:
+        logger.warning(f"Final Verification Engine encountered error: {fve_err}")
+        final_verification = {
+            "determination": "VERIFICATION_ERROR",
+            "summary": f"Final verification could not complete: {fve_err}",
+        }
+
     return {
         "case_id": case.id,
         "run_id": run_id,
@@ -462,8 +521,23 @@ async def execute_case_analysis_plan(
         "blocked_engines": len([r for r in execution_records if r.status == EngineExecutionResult.BLOCKED]),
         "failed_engines": len([r for r in execution_records if r.status == EngineExecutionResult.FAILED]),
         "observations_created": len(saved_observations),
+        "final_verification": final_verification,
         "telemetry": [r.model_dump() for r in execution_records]
     }
+
+
+# ---------------------------------------------------------------------------
+# Backward-compatibility alias (Phase 2)
+# Tests and routers that import execute_case_analysis_plan continue to work.
+# ---------------------------------------------------------------------------
+async def execute_case_analysis_plan(
+    db: AsyncSession,
+    case: Case,
+    target_engine_ids: Optional[List[str]] = None,
+    user_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """Legacy alias for run_case_analysis (Phase 2 rename)."""
+    return await run_case_analysis(db, case, target_engine_ids, user_id)
 
 from app.evidence.storage import storage_manager
 from app.department_engines.investigation.service import run_investigation_pipeline
