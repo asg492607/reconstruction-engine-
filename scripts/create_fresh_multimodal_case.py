@@ -394,8 +394,7 @@ async def setup_case_in_db():
         print(f"  Status      : CREATED (Un-reconstructed; Waiting for user-driven run)")
         print(f"==========================================================================\n")
 
-def main():
-    print("\n--- Phase 1: Generating Fresh Media Assets ---")
+def generate_all_assets():
     generate_cctv_video("cctv_depot_bay4_exterior.mp4", "CAM-04 [BAY_04_EXTERIOR]", "2026-03-05 21:12", "INBOUND")
     generate_cctv_video("cctv_corridor_vault_interior.mp4", "CAM-09 [VAULT_C_CORRIDOR]", "2026-03-05 21:18", "PROXIMITY")
     generate_cctv_video("cctv_gate_perimeter_outbound.mp4", "CAM-12 [GATE_12_NORTH]", "2026-03-05 21:26", "OUTBOUND")
@@ -405,6 +404,10 @@ def main():
     generate_inventory_reconciliation_csv("depot_inventory_reconciliation.csv")
     generate_witness_statement_text("security_officer_statement.txt")
     generate_forensic_metallurgical_report("forensic_metallurgical_report.txt")
+
+def main():
+    print("\n--- Phase 1: Generating Fresh Media Assets ---")
+    generate_all_assets()
 
     print("\n--- Phase 2: Ingesting into Database ---")
     import asyncio
