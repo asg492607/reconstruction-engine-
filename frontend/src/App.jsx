@@ -41,6 +41,17 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [reconstructionLoading, setReconstructionLoading] = useState(false);
 
+  // Listen for unauthorized session expiration
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      setUser(null);
+      removeToken();
+      setActiveCase(null);
+    };
+    window.addEventListener("rre_unauthorized", handleUnauthorized);
+    return () => window.removeEventListener("rre_unauthorized", handleUnauthorized);
+  }, []);
+
   // Load cases on mount or when user changes
   useEffect(() => {
     if (user) {
@@ -72,6 +83,12 @@ export default function App() {
       }
     } catch (err) {
       console.error("Failed to load cases:", err);
+      const msg = String(err?.message || "");
+      if (msg.includes("401") || msg.includes("Inactive or non-existent user") || msg.includes("Could not validate credentials")) {
+        removeToken();
+        setUser(null);
+        setActiveCase(null);
+      }
     } finally {
       setLoading(false);
     }

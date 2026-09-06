@@ -7,19 +7,20 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/auth': 'http://localhost:8000',
-      '/cases': 'http://localhost:8000',
-      '/evidence': 'http://localhost:8000',
-      '/observations': 'http://localhost:8000',
-      '/entities': 'http://localhost:8000',
-      '/timelines': 'http://localhost:8000',
-      '/gaps-conflicts': 'http://localhost:8000',
-      '/findings': 'http://localhost:8000',
-      '/reconstruction': 'http://localhost:8000',
-      '/verification': 'http://localhost:8000',
-      '/copilot': 'http://localhost:8000',
-      '/reports': 'http://localhost:8000',
-      '/health': 'http://localhost:8000',
+      '/auth': 'http://127.0.0.1:8000',
+      '/cases': 'http://127.0.0.1:8000',
+      '/evidence': 'http://127.0.0.1:8000',
+      '/observations': 'http://127.0.0.1:8000',
+      '/entities': 'http://127.0.0.1:8000',
+      '/timelines': 'http://127.0.0.1:8000',
+      '/gaps-conflicts': 'http://127.0.0.1:8000',
+      '/findings': 'http://127.0.0.1:8000',
+      '/reconstruction': 'http://127.0.0.1:8000',
+      '/verification': 'http://127.0.0.1:8000',
+      '/copilot': 'http://127.0.0.1:8000',
+      '/reports': 'http://127.0.0.1:8000',
+      '/health': 'http://127.0.0.1:8000',
+      '/engines': 'http://127.0.0.1:8000',
     }
   }
 })

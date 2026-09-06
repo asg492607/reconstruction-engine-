@@ -49,10 +49,12 @@ export default function UnifiedReconstructionOutput({
     : (timelineEvents || []);
   const activeTimelineEvents = rawTimelineEvents.filter(e => e.source_modality !== 'SYSTEM_RECORD' && e.event_id !== 'TL_001');
   const timelineModalities = new Set(activeTimelineEvents.map(e => e.source_modality));
-  const isMultiSourceSynchronized = timelineModalities.size > 1;
+
+  // Extract X03 & X06 Correlated Events telemetry
+  const x03Telemetry = telemetry.find(t => t.engine_id === 'X03');
+  const x06Telemetry = telemetry.find(t => t.engine_id === 'X06');
 
   // Extract X06 Sufficiency from telemetry
-  const x06Telemetry = telemetry.find(t => t.engine_id === 'X06');
   const hasTelemetry = telemetry && telemetry.length > 0;
   const hasBlockedEngines = telemetry.some(t => t.status === 'BLOCKED');
   const defaultRating = hasTelemetry
@@ -61,6 +63,9 @@ export default function UnifiedReconstructionOutput({
 
   const sufficiencyData = x06Telemetry?.outputs?.[0] || {
     sufficiency_rating: defaultRating,
+    analytical_result: defaultRating,
+    execution_status: "SUCCESS",
+    reconstruction_eligibility: "BLOCKED",
     proceed_to_reconstruction: false,
     evaluation_criteria: {
       temporal_anchor_established: activeTimelineEvents.length > 0,
@@ -72,6 +77,9 @@ export default function UnifiedReconstructionOutput({
       ? (x06Telemetry?.failure_reason || "Evidence sufficiency evaluated. Required corroborating modalities missing or blocked.")
       : "Reconstruction execution pending. Run 45-engine analysis pipeline."
   };
+
+  const correlatedEventsCount = sufficiencyData?.correlated_event_count ?? (x06Telemetry?.outputs?.[0]?.correlated_event_count ?? (x03Telemetry?.outputs?.[0]?.correlated_event_count ?? 0));
+  const isMultiSourceSynchronized = correlatedEventsCount > 0 || timelineModalities.size > 1;
 
   // Extract R01 Hypotheses from telemetry (45-engine run) or fallback to database hypotheses
   const r01Telemetry = telemetry.find(t => t.engine_id === 'R01');
@@ -254,7 +262,7 @@ export default function UnifiedReconstructionOutput({
         }}>
           {[
             { id: 'sec-summary', label: '1. Executive Summary' },
-            { id: 'sec-timeline', label: isMultiSourceSynchronized ? `2. Correlated Timeline (${activeTimelineEvents.length})` : (activeTimelineEvents.length > 0 ? `2. Source-Local Events (${activeTimelineEvents.length})` : `2. Correlated Timeline (0)`) },
+            { id: 'sec-timeline', label: (correlatedEventsCount > 0) ? `2. Correlated Timeline (${activeTimelineEvents.length})` : (activeTimelineEvents.length > 0 ? `2. Chronology (${activeTimelineEvents.length})` : `2. Correlated Timeline (0)`) },
             { id: 'sec-hypotheses', label: `3. Hypotheses & Citations (${activeHypotheses.length})` },
             { id: 'sec-challenges', label: `4. Defense Challenges (${adversarialChallenges.length})` },
             { id: 'sec-feasibility', label: `5. Physics Feasibility (${feasibilityChecks.length})` },
@@ -323,7 +331,9 @@ export default function UnifiedReconstructionOutput({
               {isMultiSourceSynchronized ? "✓ Chronology Established" : (activeTimelineEvents.length > 0 ? "• Single-Source Events" : "✗ Gaps in Timeline")}
             </div>
             <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-              {isMultiSourceSynchronized ? `${activeTimelineEvents.length} synchronized events` : (activeTimelineEvents.length > 0 ? `${activeTimelineEvents.length} source-local events (0 correlated)` : "0 synchronized events")}
+              {correlatedEventsCount > 0
+                ? `${activeTimelineEvents.length} events (${correlatedEventsCount} cross-source correlated)`
+                : (activeTimelineEvents.length > 0 ? `${activeTimelineEvents.length} source-local events (0 cross-domain correlated)` : "0 synchronized events")}
             </div>
           </div>
 
@@ -368,8 +378,8 @@ export default function UnifiedReconstructionOutput({
         <div style={{
           marginTop: '16px',
           padding: '16px 20px',
-          backgroundColor: sufficiencyData.sufficiency_rating === "SUFFICIENT_FOR_RECONSTRUCTION" ? '#f0fdf4' : (sufficiencyData.sufficiency_rating === "MARGINAL_PROBATIVE_VALUE" ? '#fffbeb' : '#fef2f2'),
-          border: `1px solid ${sufficiencyData.sufficiency_rating === "SUFFICIENT_FOR_RECONSTRUCTION" ? '#bbf7d0' : (sufficiencyData.sufficiency_rating === "MARGINAL_PROBATIVE_VALUE" ? '#fde68a' : '#fecaca')}`,
+          backgroundColor: (sufficiencyData.analytical_result === "SUFFICIENT" || sufficiencyData.sufficiency_rating === "SUFFICIENT_FOR_RECONSTRUCTION") ? '#f0fdf4' : ((sufficiencyData.analytical_result === "MARGINAL_PROBATIVE_VALUE" || sufficiencyData.sufficiency_rating === "MARGINAL_PROBATIVE_VALUE") ? '#fffbeb' : '#fef2f2'),
+          border: `1px solid ${(sufficiencyData.analytical_result === "SUFFICIENT" || sufficiencyData.sufficiency_rating === "SUFFICIENT_FOR_RECONSTRUCTION") ? '#bbf7d0' : ((sufficiencyData.analytical_result === "MARGINAL_PROBATIVE_VALUE" || sufficiencyData.sufficiency_rating === "MARGINAL_PROBATIVE_VALUE") ? '#fde68a' : '#fecaca')}`,
           borderRadius: 'var(--radius-md)'
         }}>
           <div style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: '4px' }}>
@@ -380,12 +390,24 @@ export default function UnifiedReconstructionOutput({
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--text-main)' }}>Reconstruction Sufficiency:</span>
-            <span className={sufficiencyData.sufficiency_rating === "SUFFICIENT_FOR_RECONSTRUCTION" ? "badge badge-green" : "badge badge-red"} style={{ fontSize: '0.8rem', padding: '4px 10px' }}>
-              {sufficiencyData.sufficiency_rating === "SUFFICIENT_FOR_RECONSTRUCTION" ? "SUFFICIENT" : "INSUFFICIENT"}
+            <span className={
+              (sufficiencyData.analytical_result === "SUFFICIENT" || sufficiencyData.sufficiency_rating === "SUFFICIENT_FOR_RECONSTRUCTION")
+                ? "badge badge-green"
+                : ((sufficiencyData.analytical_result === "MARGINAL_PROBATIVE_VALUE" || sufficiencyData.sufficiency_rating === "MARGINAL_PROBATIVE_VALUE") ? "badge badge-amber" : "badge badge-red")
+            } style={{ fontSize: '0.8rem', padding: '4px 10px' }}>
+              {(sufficiencyData.analytical_result === "SUFFICIENT" || sufficiencyData.sufficiency_rating === "SUFFICIENT_FOR_RECONSTRUCTION")
+                ? "SUFFICIENT"
+                : ((sufficiencyData.analytical_result === "MARGINAL_PROBATIVE_VALUE" || sufficiencyData.sufficiency_rating === "MARGINAL_PROBATIVE_VALUE") ? "MARGINAL_PROBATIVE_VALUE" : "INSUFFICIENT")}
             </span>
-            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>Execution Status: <strong>SUCCESS</strong></span>
-            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: sufficiencyData.sufficiency_rating === "SUFFICIENT_FOR_RECONSTRUCTION" ? '#059669' : '#dc2626' }}>
-              Analytical Result: <strong>{sufficiencyData.sufficiency_rating || 'INSUFFICIENT_FOR_RECONSTRUCTION'}</strong>
+            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>Execution Status: <strong>{sufficiencyData.execution_status || 'SUCCESS'}</strong></span>
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, color:
+              (sufficiencyData.analytical_result === "SUFFICIENT" || sufficiencyData.sufficiency_rating === "SUFFICIENT_FOR_RECONSTRUCTION") ? '#059669' :
+              ((sufficiencyData.analytical_result === "MARGINAL_PROBATIVE_VALUE" || sufficiencyData.sufficiency_rating === "MARGINAL_PROBATIVE_VALUE") ? '#d97706' : '#dc2626')
+            }}>
+              Analytical Result: <strong>{sufficiencyData.analytical_result || sufficiencyData.sufficiency_rating || 'INSUFFICIENT'}</strong>
+            </span>
+            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+              Reconstruction Eligibility: <strong>{sufficiencyData.reconstruction_eligibility || (sufficiencyData.proceed_to_reconstruction ? 'ALLOWED_WITH_WARNINGS' : 'BLOCKED')}</strong>
             </span>
           </div>
           <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: '4px' }}>Decision Basis:</div>
@@ -396,7 +418,7 @@ export default function UnifiedReconstructionOutput({
               ))
             ) : (
               <>
-                <li>{activeTimelineEvents.length > 0 ? `${activeTimelineEvents.length} source-local events (0 correlated cross-domain events)` : '0 correlated events'}</li>
+                <li>{activeTimelineEvents.length > 0 ? `${activeTimelineEvents.length} source-local events (${correlatedEventsCount} correlated cross-domain)` : '0 correlated events'}</li>
                 <li>{sufficiencyData.evaluation_criteria?.spatial_pathway_plausible ? 'CCTV surveillance video verified' : 'no CCTV'}</li>
                 <li>{sufficiencyData.evaluation_criteria?.asset_delta_proven ? 'financial transaction/inventory ledger present' : 'no financial records'}</li>
                 <li>{sufficiencyData.evaluation_criteria?.actor_attribution_corroborated ? 'witness statements verified' : 'no usable witness extraction'}</li>
@@ -419,10 +441,10 @@ export default function UnifiedReconstructionOutput({
               {isMultiSourceSynchronized ? "Multi-Source Correlated Timeline (X02)" : "Chronological Events & Source Alignment (X02)"}
             </h2>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              {isMultiSourceSynchronized
-                ? `Synchronized timeline: ${activeTimelineEvents.length} events aligned across ${timelineModalities.size} independent sensor and witness modalities.`
+              {correlatedEventsCount > 0
+                ? `Synchronized timeline: ${activeTimelineEvents.length} events (${correlatedEventsCount} cross-source correlated) across independent sensor and witness modalities.`
                 : activeTimelineEvents.length > 0
-                  ? `Source-local events: ${activeTimelineEvents.length} • Correlated events: 0 (Decoupled local observations; cross-domain synchronization requires multi-modal evidence).`
+                  ? `Source-local events: ${activeTimelineEvents.length} (Decoupled local observations; cross-domain synchronization requires multi-modal evidence).`
                   : "No timeline events established from uploaded case exhibits."}
             </p>
           </div>

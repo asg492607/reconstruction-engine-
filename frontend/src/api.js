@@ -34,8 +34,8 @@ async function apiRequest(endpoint, options = {}) {
   });
 
   if (response.status === 401) {
-    // If unauthorized, clear token
-    // removeToken();
+    removeToken();
+    window.dispatchEvent(new CustomEvent("rre_unauthorized"));
   }
 
   if (!response.ok) {
@@ -208,5 +208,17 @@ export const api = {
     }),
     list: async (caseId) => apiRequest(`/cases/${caseId}/reports`),
     get: async (caseId, reportId) => apiRequest(`/cases/${caseId}/reports/${reportId}`)
+  },
+
+  knowledge: {
+    list: async (caseId) => apiRequest(`/cases/${caseId}/knowledge`),
+    create: async (caseId, payload) => apiRequest(`/cases/${caseId}/knowledge`, {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }),
+    get: async (caseId, itemId) => apiRequest(`/cases/${caseId}/knowledge/${itemId}`),
+    delete: async (caseId, itemId) => apiRequest(`/cases/${caseId}/knowledge/${itemId}`, {
+      method: "DELETE"
+    })
   }
 };
