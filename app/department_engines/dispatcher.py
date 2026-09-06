@@ -11,6 +11,7 @@ from app.models.enums import EvidenceType, ProcessingStatus, Department, Observa
 from app.department_engines.framework.registry import engine_registry
 from app.department_engines.framework.planner import dynamic_planner, DynamicAnalysisPlan
 from app.department_engines.framework.base import (
+    AnalysisRunContext,
     EngineContext,
     EngineExecutionRecord,
     EngineExecutionResult,
@@ -22,9 +23,10 @@ from app.observations.service import create_observation
 
 logger = logging.getLogger(__name__)
 
-# Execution Telemetry in-memory cache keyed by case_id
+# Execution Telemetry and Verification in-memory cache keyed by case_id
 _CASE_EXECUTION_RECORDS: Dict[str, List[EngineExecutionRecord]] = {}
 _CASE_EXECUTION_HISTORY: Dict[str, List[Dict[str, Any]]] = {}
+_CASE_LATEST_VERIFICATION: Dict[str, Dict[str, Any]] = {}
 
 def get_case_telemetry(case_id: str) -> List[Dict[str, Any]]:
     records = _CASE_EXECUTION_RECORDS.get(case_id, [])
@@ -32,6 +34,10 @@ def get_case_telemetry(case_id: str) -> List[Dict[str, Any]]:
 
 def get_case_analysis_runs(case_id: str) -> List[Dict[str, Any]]:
     return _CASE_EXECUTION_HISTORY.get(case_id, [])
+
+def get_case_latest_verification(case_id: str) -> Optional[Dict[str, Any]]:
+    return _CASE_LATEST_VERIFICATION.get(case_id)
+
 
 async def get_case_analysis_plan(db: AsyncSession, case: Case) -> DynamicAnalysisPlan:
     """
@@ -53,34 +59,66 @@ async def run_case_analysis(
     db: AsyncSession,
     case: Case,
     target_engine_ids: Optional[List[str]] = None,
-    user_id: Optional[str] = None
+    user_id: Optional[str] = None,
+    analysis_version: Optional[int] = None
 ) -> Dict[str, Any]:
     """
     Phase 2 — Unified Case Analysis Operation.
 
-    One click executes whatever is currently supportable:
-      - Tier 1-5 engines always run based on available evidence
-      - Tier 6 (R01-R04) gated ONLY by X06 sufficiency, not by absence of other outputs
-      - Final Verification Engine (Phase 7) runs after all engines complete
-      - Output Gate (Phase 6) applied post-execution on MODEL/LLM/HYBRID engines
-      - Resource Governor (Phase 8) enforces per-engine time budgets
+    Execution Governance:
+      - All eligible engines are evaluated by the Condition Trigger Manager; only engines whose
+        trigger, dependency, authorization, quality, and objective conditions are satisfied are executed.
+      - Tier 6 (R01-R04) gated by X06 sufficiency assessment.
+      - Final Verification Engine (Phase 7) independently audits the analytical graph after all engines complete.
+      - Output Gate (Phase 6) applied post-execution on MODEL/LLM/HYBRID engines.
+      - Resource Governor (Phase 8) enforces per-engine budgets and hard execution timeouts.
 
-    Legacy alias: execute_case_analysis_plan → run_case_analysis
+    Legacy alias: execute_case_analysis_plan -> run_case_analysis
     """
+    from app.department_engines.framework.input_resolver import input_resolver
+
+    active_version = analysis_version if analysis_version is not None else (case.current_version or 1)
+    run_id = f"RUN_{uuid.uuid4().hex[:8].upper()}"
+
     stmt = select(Evidence).where(Evidence.case_id == case.id)
     res = await db.execute(stmt)
     evidence_list = list(res.scalars().all())
 
-    plan = await get_case_analysis_plan(db, case)
-    engine_sequence = target_engine_ids or plan.execution_order
+    manifest_items = []
+    for ev in evidence_list:
+        et_val = ev.evidence_type.value if hasattr(ev.evidence_type, "value") else str(ev.evidence_type)
+        manifest_items.append({
+            "evidence_id": ev.id,
+            "title": getattr(ev, "title", None) or getattr(ev, "original_filename", None) or f"Exhibit {ev.id[:8]}",
+            "evidence_type": et_val,
+            "filename": ev.original_filename
+        })
+
+    analysis_run_ctx = AnalysisRunContext(
+        case_id=case.id,
+        analysis_version=active_version,
+        analysis_run_id=run_id,
+        evidence_manifest=manifest_items
+    )
 
     context = EngineContext(
         case_id=case.id,
+        analysis_version=active_version,
+        analysis_run_id=run_id,
         case_title=case.title,
         specific_offense=str(case.specific_offense.value if hasattr(case.specific_offense, "value") and case.specific_offense else (case.specific_offense or "")),
         incident_location=case.incident_location,
         incident_time=case.incident_time_observed or datetime.now(timezone.utc),
-        user_id=user_id
+        user_id=user_id,
+        run_context=analysis_run_ctx
+    )
+
+    plan = await get_case_analysis_plan(db, case)
+    engine_sequence = target_engine_ids or plan.execution_order
+
+    logger.info(
+        f"[TRACE {run_id}] {case.id} v{active_version} | Case Analysis Started. "
+        f"Manifest: {len(evidence_list)} exhibits. Planned sequence: {len(engine_sequence)} engines."
     )
 
     execution_records: List[EngineExecutionRecord] = []
@@ -91,64 +129,69 @@ async def run_case_analysis(
         if not eng:
             continue
 
-        # 1. HARD DOWNSTREAM GATE: Check explicit dependencies
+        # 1. HARD DOWNSTREAM GATE: Check explicit dependencies for departmental & downstream verification engines
         dep_blocked = False
-        for dep_id in eng.definition.dependencies:
-            dep_rec = context.prior_results.get(dep_id)
-            if dep_rec:
-                if dep_rec.status == EngineExecutionResult.BLOCKED:
-                    dep_blocked = True
-                    record = EngineExecutionRecord(
-                        case_id=case.id,
-                        engine_id=eid,
-                        engine_version=eng.definition.engine_version,
-                        execution_mode=eng.definition.execution_mode,
-                        status=EngineExecutionResult.BLOCKED,
-                        confidence=None,
-                        actual_execution_path="BLOCKED_PREREQUISITE_FAILED",
-                        actual_execution_mode="BLOCKED",
-                        failure_reason=f"Prerequisite engine '{dep_id}' was BLOCKED ({dep_rec.failure_reason or 'prerequisite unavailable'})."
-                    )
-                    context.prior_results[eid] = record
-                    execution_records.append(record)
-                    break
-                elif dep_rec.status == EngineExecutionResult.NO_USABLE_OUTPUT:
-                    dep_blocked = True
-                    record = EngineExecutionRecord(
-                        case_id=case.id,
-                        engine_id=eid,
-                        engine_version=eng.definition.engine_version,
-                        execution_mode=eng.definition.execution_mode,
-                        status=EngineExecutionResult.BLOCKED,
-                        confidence=None,
-                        actual_execution_path="BLOCKED_PREREQUISITE_NO_USABLE_OUTPUT",
-                        actual_execution_mode="BLOCKED",
-                        failure_reason=f"Prerequisite engine '{dep_id}' produced NO_USABLE_OUTPUT ({dep_rec.failure_reason or 'no usable features'})."
-                    )
-                    context.prior_results[eid] = record
-                    execution_records.append(record)
-                    break
-                elif dep_rec.status == EngineExecutionResult.FAILED:
-                    dep_blocked = True
-                    record = EngineExecutionRecord(
-                        case_id=case.id,
-                        engine_id=eid,
-                        engine_version=eng.definition.engine_version,
-                        execution_mode=eng.definition.execution_mode,
-                        status=EngineExecutionResult.BLOCKED,
-                        confidence=None,
-                        actual_execution_path="BLOCKED_PREREQUISITE_FAILED",
-                        actual_execution_mode="BLOCKED",
-                        failure_reason=f"Prerequisite engine '{dep_id}' FAILED ({dep_rec.failure_reason or 'engine error'})."
-                    )
-                    context.prior_results[eid] = record
-                    execution_records.append(record)
-                    break
+        if not eid.startswith("X") and eid != "R01":
+            for dep_id in eng.definition.dependencies:
+                dep_rec = context.prior_results.get(dep_id)
+                if dep_rec:
+                    if dep_rec.status == EngineExecutionResult.BLOCKED:
+                        dep_blocked = True
+                        record = EngineExecutionRecord(
+                            case_id=case.id,
+                            analysis_version=active_version,
+                            engine_id=eid,
+                            engine_version=eng.definition.engine_version,
+                            execution_mode=eng.definition.execution_mode,
+                            status=EngineExecutionResult.BLOCKED,
+                            confidence=None,
+                            actual_execution_path="BLOCKED_PREREQUISITE_FAILED",
+                            actual_execution_mode="BLOCKED",
+                            failure_reason=f"Prerequisite engine '{dep_id}' was BLOCKED ({dep_rec.failure_reason or 'prerequisite unavailable'})."
+                        )
+                        context.prior_results[eid] = record
+                        execution_records.append(record)
+                        break
+                    elif dep_rec.status == EngineExecutionResult.NO_USABLE_OUTPUT:
+                        dep_blocked = True
+                        record = EngineExecutionRecord(
+                            case_id=case.id,
+                            analysis_version=active_version,
+                            engine_id=eid,
+                            engine_version=eng.definition.engine_version,
+                            execution_mode=eng.definition.execution_mode,
+                            status=EngineExecutionResult.BLOCKED,
+                            confidence=None,
+                            actual_execution_path="BLOCKED_PREREQUISITE_NO_USABLE_OUTPUT",
+                            actual_execution_mode="BLOCKED",
+                            failure_reason=f"Prerequisite engine '{dep_id}' produced NO_USABLE_OUTPUT ({dep_rec.failure_reason or 'no usable features'})."
+                        )
+                        context.prior_results[eid] = record
+                        execution_records.append(record)
+                        break
+                    elif dep_rec.status == EngineExecutionResult.FAILED:
+                        dep_blocked = True
+                        record = EngineExecutionRecord(
+                            case_id=case.id,
+                            analysis_version=active_version,
+                            engine_id=eid,
+                            engine_version=eng.definition.engine_version,
+                            execution_mode=eng.definition.execution_mode,
+                            status=EngineExecutionResult.BLOCKED,
+                            confidence=None,
+                            actual_execution_path="BLOCKED_PREREQUISITE_FAILED",
+                            actual_execution_mode="BLOCKED",
+                            failure_reason=f"Prerequisite engine '{dep_id}' FAILED ({dep_rec.failure_reason or 'engine error'})."
+                        )
+                        context.prior_results[eid] = record
+                        execution_records.append(record)
+                        break
         if dep_blocked:
             continue
 
-        # 2. HARD DOWNSTREAM GATE FOR RECONSTRUCTION (X06 -> R01, R02, R03)
-        if eid in ["R01", "R02", "R03"]:
+        # 2. HARD DOWNSTREAM GATE FOR RECONSTRUCTION (X06 -> R02, R03)
+        # Note: R01 evaluates the safe INSUFFICIENT_EVIDENCE deterministic finding when X06 is insufficient.
+        if eid in ["R02", "R03"]:
             x06_rec = context.prior_results.get("X06")
             is_insufficient = False
             if x06_rec:
@@ -169,6 +212,7 @@ async def run_case_analysis(
                     reason = "Prerequisite engine R01 is BLOCKED (no hypotheses exist to adversarially challenge)."
                 record = EngineExecutionRecord(
                     case_id=case.id,
+                    analysis_version=active_version,
                     engine_id=eid,
                     engine_version=eng.definition.engine_version,
                     execution_mode=eng.definition.execution_mode,
@@ -190,6 +234,7 @@ async def run_case_analysis(
             ):
                 record = EngineExecutionRecord(
                     case_id=case.id,
+                    analysis_version=active_version,
                     engine_id=eid,
                     engine_version=eng.definition.engine_version,
                     execution_mode=eng.definition.execution_mode,
@@ -214,6 +259,7 @@ async def run_case_analysis(
                 # Modality is unavailable in this case exhibits: BLOCK execution
                 record = EngineExecutionRecord(
                     case_id=case.id,
+                    analysis_version=active_version,
                     engine_id=eid,
                     engine_version=eng.definition.engine_version,
                     execution_mode=eng.definition.execution_mode,
@@ -229,14 +275,27 @@ async def run_case_analysis(
         elif eid.startswith("E"):
             # Evidence foundation engines without specific restriction operate on case exhibit manifest
             matched_evidence = evidence_list[0] if evidence_list else None
+        elif eid.startswith("I"):
+            # Investigation engines without specific accepted_evidence_types default to CCTV/video if available, else first exhibit
+            for ev in evidence_list:
+                et = str(getattr(ev, "evidence_type", "")).upper()
+                if "CCTV" in et or "VIDEO" in et:
+                    matched_evidence = ev
+                    break
+            if not matched_evidence and evidence_list:
+                matched_evidence = evidence_list[0]
 
         try:
+            # Data consumption boundary check
+            input_resolver.filter_prior_results_for_engine(context, case.id, active_version)
+
             record = await engine_registry.execute_engine(
                 engine_id=eid,
                 case_id=case.id,
                 evidence=matched_evidence,
                 context=context
             )
+            record.analysis_version = active_version
             # Evidence Reference Integrity Gate enforcement
             from app.reconstruction.integrity_gate import (
                 validate_evidence_reference_integrity,
@@ -282,6 +341,7 @@ async def run_case_analysis(
             logger.error(f"Error executing engine {eid}: {e}", exc_info=True)
             record = EngineExecutionRecord(
                 case_id=case.id,
+                analysis_version=active_version,
                 engine_id=eid,
                 engine_version=eng.definition.engine_version,
                 execution_mode=eng.definition.execution_mode,
@@ -376,6 +436,7 @@ async def run_case_analysis(
                     obs = Observation(
                         evidence_id=matched_evidence.id,
                         case_id=case.id,
+                        analysis_version=active_version,
                         department=Department(eng.definition.department) if eng.definition.department in [d.value for d in Department] else Department.CORRELATED,
                         observation_type=obs_type,
                         raw_data=item,
@@ -396,6 +457,7 @@ async def run_case_analysis(
             if ueng:
                 execution_records.append(EngineExecutionRecord(
                     case_id=case.id,
+                    analysis_version=active_version,
                     engine_id=ueid,
                     engine_version=ueng.definition.engine_version,
                     execution_mode=ueng.definition.execution_mode,
@@ -405,23 +467,138 @@ async def run_case_analysis(
                     failure_reason=f"Unavailable: No accepted evidence modality attached to case ({unavail.get('reason', '')})"
                 ))
 
-    # Synchronize database state for Hypotheses and Gaps/Conflicts
-    from app.models.entities import Hypothesis, GapConflict
-    from app.models.enums import GapConflictType, Significance, HypothesisStatus, ClaimStrength
+    # Synchronize database state for version-scoped analytical entities
+    from app.models.entities import (
+        Hypothesis, GapConflict, CandidateEntity, CandidateEntityLink,
+        SourceTimeline, SourceTimelineEvent, CorrelatedTimelineEvent
+    )
+    from app.models.enums import (
+        GapConflictType, Significance, HypothesisStatus, ClaimStrength,
+        EntityType, IdentityStatus, TimeConfidence
+    )
     from sqlalchemy import delete
 
-    # 1. Database sync for Hypotheses
+    # 1. Clean slate & sync Candidate Entities (X01)
+    await db.execute(delete(CandidateEntityLink).where(CandidateEntityLink.case_id == case.id, CandidateEntityLink.analysis_version == active_version))
+    await db.execute(delete(CandidateEntity).where(CandidateEntity.case_id == case.id, CandidateEntity.analysis_version == active_version))
+    x01_rec = context.prior_results.get("X01")
+    if x01_rec and x01_rec.outputs:
+        for ent in x01_rec.outputs:
+            if not isinstance(ent, dict):
+                continue
+            e_type_str = ent.get("entity_type", "OTHER")
+            e_type = EntityType.PERSON if e_type_str == "PERSON" else (EntityType.ITEM if e_type_str == "ITEM" else (EntityType.VEHICLE if e_type_str == "VEHICLE" else EntityType.OTHER))
+            id_stat = IdentityStatus.CANDIDATE if ent.get("identity_status") == "CANDIDATE" else IdentityStatus.CONFIRMED
+            ent_key = ent.get("entity_id")
+            db_ent_id = f"{case.id}_{ent_key}" if ent_key else f"ent_{uuid.uuid4().hex[:12]}"
+            db_ent = CandidateEntity(
+                id=db_ent_id,
+                case_id=case.id,
+                analysis_version=active_version,
+                entity_type=e_type,
+                label=ent.get("candidate_label") or ent.get("entity_id") or "Candidate Entity",
+                description=ent.get("attributes", {}),
+                identity_status=id_stat,
+                identity_note=ent.get("provenance_summary")
+            )
+            db.add(db_ent)
+            analysis_run_ctx.persisted_record_ids.setdefault("candidate_entities", []).append(db_ent.id)
+
+    # 2. Clean slate & sync Timelines (X02)
+    st_res = await db.execute(select(SourceTimeline.id).where(SourceTimeline.case_id == case.id, SourceTimeline.analysis_version == active_version))
+    st_ids = list(st_res.scalars().all())
+    if st_ids:
+        await db.execute(delete(SourceTimelineEvent).where(SourceTimelineEvent.source_timeline_id.in_(st_ids)))
+        await db.execute(delete(SourceTimeline).where(SourceTimeline.id.in_(st_ids)))
+
+    x02_rec = context.prior_results.get("X02")
+    if x02_rec and x02_rec.outputs:
+        primary_st = SourceTimeline(
+            id=f"st_{uuid.uuid4().hex[:12]}",
+            case_id=case.id,
+            analysis_version=active_version,
+            source_label="Multi-Modal Chronology",
+            evidence_id=evidence_list[0].id if evidence_list else case.id,
+            department=Department.CORRELATED
+        )
+        db.add(primary_st)
+        analysis_run_ctx.persisted_record_ids.setdefault("source_timelines", []).append(primary_st.id)
+
+        for idx, ev in enumerate(x02_rec.outputs):
+            if not isinstance(ev, dict):
+                continue
+            raw_ts = ev.get("observed_time") or ev.get("timestamp")
+            parsed_dt = None
+            if raw_ts:
+                try:
+                    parsed_dt = datetime.fromisoformat(str(raw_ts).replace("Z", "+00:00"))
+                except Exception:
+                    pass
+
+            ev_key = ev.get("event_id")
+            db_ev_id = f"{primary_st.id}_{ev_key}" if ev_key else f"ste_{uuid.uuid4().hex[:12]}"
+            st_ev = SourceTimelineEvent(
+                id=db_ev_id,
+                analysis_version=active_version,
+                source_timeline_id=primary_st.id,
+                event_type=ev.get("event_type", "OBSERVATION"),
+                description=ev.get("description") or ev.get("label") or "Timeline observation",
+                observed_time_raw=str(raw_ts) if raw_ts else None,
+                event_time=parsed_dt,
+                time_confidence=TimeConfidence.EXACT if ev.get("time_confidence") == "EXACT" else TimeConfidence.ESTIMATED,
+                entity_ids=ev.get("entity_refs", []),
+                sequence_order=idx
+            )
+            db.add(st_ev)
+            analysis_run_ctx.persisted_record_ids.setdefault("source_timeline_events", []).append(st_ev.id)
+
+    # 3. Clean slate & sync Correlated Timeline Events (X03)
+    await db.execute(delete(CorrelatedTimelineEvent).where(CorrelatedTimelineEvent.case_id == case.id, CorrelatedTimelineEvent.analysis_version == active_version))
+    x03_rec = context.prior_results.get("X03")
+    if x03_rec and x03_rec.outputs:
+        for corr in x03_rec.outputs:
+            if not isinstance(corr, dict):
+                continue
+            if corr.get("correlation_type") in ("INSUFFICIENT_MULTI_MODALITY", "TIMELINE_BREAK"):
+                continue
+
+            w_start = corr.get("window_start")
+            corr_dt = None
+            if w_start:
+                try:
+                    corr_dt = datetime.fromisoformat(str(w_start).replace("Z", "+00:00"))
+                except Exception:
+                    pass
+
+            corr_key = corr.get("correlation_id")
+            db_corr_id = f"{case.id}_{corr_key}" if corr_key else f"cte_{uuid.uuid4().hex[:12]}"
+            db_corr = CorrelatedTimelineEvent(
+                id=db_corr_id,
+                case_id=case.id,
+                analysis_version=active_version,
+                event_time=corr_dt,
+                time_confidence=TimeConfidence.ESTIMATED,
+                description=f"{corr.get('title', 'Correlated Event')}: {corr.get('summary', '')}",
+                source_event_ids=corr.get("correlated_sources", []),
+                supporting_evidence_ids=corr.get("correlated_sources", []),
+                entity_ids=[]
+            )
+            db.add(db_corr)
+            analysis_run_ctx.persisted_record_ids.setdefault("correlated_timeline_events", []).append(db_corr.id)
+
+    # 4. Clean slate & sync Hypotheses (R01)
+    await db.execute(delete(Hypothesis).where(Hypothesis.case_id == case.id, Hypothesis.analysis_version == active_version))
     r01_rec = context.prior_results.get("R01")
-    if r01_rec and r01_rec.status == EngineExecutionResult.BLOCKED:
-        # Clear stale hypotheses from prior runs
-        await db.execute(delete(Hypothesis).where(Hypothesis.case_id == case.id))
-    elif r01_rec and r01_rec.outputs:
-        await db.execute(delete(Hypothesis).where(Hypothesis.case_id == case.id))
+    if r01_rec and r01_rec.outputs and r01_rec.status != EngineExecutionResult.BLOCKED:
         for h in r01_rec.outputs:
             conf_val = h.get("confidence_score")
             str_val = ClaimStrength.STRONG if (conf_val is not None and conf_val > 0.8) else ClaimStrength.MODERATE
+            hyp_key = h.get("hypothesis_id")
+            db_hyp_id = f"{case.id}_{hyp_key}" if hyp_key else f"hyp_{uuid.uuid4().hex[:12]}"
             db_hyp = Hypothesis(
+                id=db_hyp_id,
                 case_id=case.id,
+                analysis_version=active_version,
                 label=h.get("hypothesis_title", "Reconstruction Hypothesis"),
                 description=h.get("narrative", ""),
                 status=HypothesisStatus.DRAFT,
@@ -430,37 +607,54 @@ async def run_case_analysis(
                 sequence=h.get("sequence", [])
             )
             db.add(db_hyp)
+            analysis_run_ctx.persisted_record_ids.setdefault("hypotheses", []).append(db_hyp.id)
 
-    # 2. Database sync for Gaps (X04)
+    # 5. Clean slate & sync Gaps (X04) and Conflicts (X05)
+    await db.execute(delete(GapConflict).where(GapConflict.case_id == case.id, GapConflict.analysis_version == active_version))
     x04_rec = context.prior_results.get("X04")
-    if x04_rec is not None:
-        await db.execute(delete(GapConflict).where(GapConflict.case_id == case.id, GapConflict.gc_type == GapConflictType.GAP))
-        for g in (x04_rec.outputs or []):
+    if x04_rec and x04_rec.outputs:
+        for g in x04_rec.outputs:
+            gap_key = g.get("gap_id")
+            db_gap_id = f"{case.id}_{gap_key}" if gap_key else f"gap_{uuid.uuid4().hex[:12]}"
             sig = Significance.CRITICAL if g.get("significance") == "CRITICAL" else Significance.HIGH
             gc = GapConflict(
+                id=db_gap_id,
                 case_id=case.id,
+                analysis_version=active_version,
                 gc_type=GapConflictType.GAP,
                 description=g.get("description", "Evidentiary gap identified"),
                 significance=sig,
                 significance_reason=g.get("remediation")
             )
             db.add(gc)
+            analysis_run_ctx.persisted_record_ids.setdefault("gaps_conflicts", []).append(gc.id)
 
-    # 3. Database sync for Conflicts (X05)
     x05_rec = context.prior_results.get("X05")
-    if x05_rec is not None:
-        await db.execute(delete(GapConflict).where(GapConflict.case_id == case.id, GapConflict.gc_type != GapConflictType.GAP))
-        for c in (x05_rec.outputs or []):
+    if x05_rec and x05_rec.outputs:
+        for c in x05_rec.outputs:
+            conflict_key = c.get("conflict_id")
+            db_conflict_id = f"{case.id}_{conflict_key}" if conflict_key else f"conf_{uuid.uuid4().hex[:12]}"
             gc = GapConflict(
+                id=db_conflict_id,
                 case_id=case.id,
+                analysis_version=active_version,
                 gc_type=GapConflictType.SOURCE_DISAGREEMENT,
                 description=c.get("discrepancy_explanation") or c.get("description", "Source discrepancy"),
                 significance=Significance.HIGH,
                 significance_reason=c.get("admissibility_and_credibility_note")
             )
             db.add(gc)
+            analysis_run_ctx.persisted_record_ids.setdefault("gaps_conflicts", []).append(gc.id)
 
     await db.commit()
+    logger.info(
+        f"[TRACE {run_id}] {case.id} v{active_version} | DB Sync Complete: "
+        f"{len(analysis_run_ctx.persisted_record_ids.get('candidate_entities', []))} entities, "
+        f"{len(analysis_run_ctx.persisted_record_ids.get('source_timeline_events', []))} source events, "
+        f"{len(analysis_run_ctx.persisted_record_ids.get('correlated_timeline_events', []))} correlated events, "
+        f"{len(analysis_run_ctx.persisted_record_ids.get('hypotheses', []))} hypotheses, "
+        f"{len(analysis_run_ctx.persisted_record_ids.get('gaps_conflicts', []))} gaps/conflicts."
+    )
 
     # Update telemetry store
     _CASE_EXECUTION_RECORDS[case.id] = execution_records
@@ -468,7 +662,6 @@ async def run_case_analysis(
     # Track immutable analysis run history for audit integrity
     run_history = _CASE_EXECUTION_HISTORY.setdefault(case.id, [])
     run_number = len(run_history) + 1
-    run_id = f"RUN_{uuid.uuid4().hex[:8].upper()}"
 
     run_snapshot = {
         "run_id": run_id,
@@ -500,7 +693,8 @@ async def run_case_analysis(
         fve_result = final_verification_engine.verify(
             engine_outputs=context.prior_results,
             valid_evidence_ids=valid_ev_ids_for_fve,
-            case_id=case.id
+            case_id=case.id,
+            analysis_version=active_version
         )
         final_verification = fve_result.to_dict()
     except Exception as fve_err:
@@ -510,9 +704,19 @@ async def run_case_analysis(
             "summary": f"Final verification could not complete: {fve_err}",
         }
 
+    _CASE_LATEST_VERIFICATION[case.id] = final_verification
+    logger.info(
+        f"[TRACE {run_id}] {case.id} v{active_version} | Final Verification Determination: "
+        f"{final_verification.get('determination')}. Summary: {final_verification.get('summary')}"
+    )
+
+    telemetry_dump = [r.model_dump() for r in execution_records]
     return {
         "case_id": case.id,
+        "analysis_version": active_version,
         "run_id": run_id,
+        "analysis_run_id": run_id,
+        "status": final_verification.get("determination"),
         "run_number": run_number,
         "total_historical_runs": len(run_history),
         "engines_executed": len(execution_records),
@@ -522,7 +726,8 @@ async def run_case_analysis(
         "failed_engines": len([r for r in execution_records if r.status == EngineExecutionResult.FAILED]),
         "observations_created": len(saved_observations),
         "final_verification": final_verification,
-        "telemetry": [r.model_dump() for r in execution_records]
+        "telemetry": telemetry_dump,
+        "execution_matrix": {r.engine_id: r.model_dump() for r in execution_records}
     }
 
 
@@ -534,10 +739,11 @@ async def execute_case_analysis_plan(
     db: AsyncSession,
     case: Case,
     target_engine_ids: Optional[List[str]] = None,
-    user_id: Optional[str] = None
+    user_id: Optional[str] = None,
+    analysis_version: Optional[int] = None
 ) -> Dict[str, Any]:
     """Legacy alias for run_case_analysis (Phase 2 rename)."""
-    return await run_case_analysis(db, case, target_engine_ids, user_id)
+    return await run_case_analysis(db, case, target_engine_ids, user_id, analysis_version)
 
 from app.evidence.storage import storage_manager
 from app.department_engines.investigation.service import run_investigation_pipeline

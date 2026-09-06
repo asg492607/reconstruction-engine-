@@ -13,6 +13,7 @@ from app.models.enums import (
     HypothesisStatus, GapConflictType, Significance, TargetType, VerificationAction,
     OffenseCategory, SpecificOffense, SufficiencyRating
 )
+from app.models.knowledge import CaseKnowledgeItem
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
@@ -135,6 +136,7 @@ class Observation(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
     evidence_id: Mapped[str] = mapped_column(String(36), ForeignKey("evidence.id"), nullable=False)
     case_id: Mapped[str] = mapped_column(String(36), ForeignKey("cases.id"), nullable=False)
+    analysis_version: Mapped[int] = mapped_column(Integer, default=1, index=True)
     department: Mapped[Department] = mapped_column(SAEnum(Department, native_enum=False), nullable=False)
     observation_type: Mapped[ObservationType] = mapped_column(SAEnum(ObservationType, native_enum=False), nullable=False)
     
@@ -180,6 +182,7 @@ class CandidateEntity(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
     case_id: Mapped[str] = mapped_column(String(36), ForeignKey("cases.id"), nullable=False)
+    analysis_version: Mapped[int] = mapped_column(Integer, default=1, index=True)
     entity_type: Mapped[EntityType] = mapped_column(SAEnum(EntityType, native_enum=False), nullable=False)
     label: Mapped[str] = mapped_column(String(128), nullable=False) # e.g. "P1", "V1", "ITEM-PHONE"
     description: Mapped[dict] = mapped_column(JSON, default=dict)
@@ -197,6 +200,7 @@ class CandidateEntityLink(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
     case_id: Mapped[str] = mapped_column(String(36), ForeignKey("cases.id"), nullable=False)
+    analysis_version: Mapped[int] = mapped_column(Integer, default=1, index=True)
     observation_id: Mapped[str] = mapped_column(String(36), ForeignKey("observations.id"), nullable=False)
     candidate_entity_id: Mapped[str] = mapped_column(String(36), ForeignKey("candidate_entities.id"), nullable=False)
     link_confidence: Mapped[float] = mapped_column(Float, default=0.0)
@@ -216,6 +220,7 @@ class Finding(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
     case_id: Mapped[str] = mapped_column(String(36), ForeignKey("cases.id"), nullable=False)
+    analysis_version: Mapped[int] = mapped_column(Integer, default=1, index=True)
     department: Mapped[Department] = mapped_column(SAEnum(Department, native_enum=False), nullable=False)
     finding_type: Mapped[str] = mapped_column(String(128), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
@@ -249,6 +254,7 @@ class Claim(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
     case_id: Mapped[str] = mapped_column(String(36), ForeignKey("cases.id"), nullable=False)
+    analysis_version: Mapped[int] = mapped_column(Integer, default=1, index=True)
     claim_text: Mapped[str] = mapped_column(Text, nullable=False)
     finding_ids: Mapped[list] = mapped_column(JSON, default=list)
     claim_strength: Mapped[ClaimStrength] = mapped_column(SAEnum(ClaimStrength, native_enum=False), default=ClaimStrength.MODERATE)
@@ -263,6 +269,7 @@ class SourceTimeline(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
     case_id: Mapped[str] = mapped_column(String(36), ForeignKey("cases.id"), nullable=False)
+    analysis_version: Mapped[int] = mapped_column(Integer, default=1, index=True)
     source_label: Mapped[str] = mapped_column(String(128), nullable=False)
     evidence_id: Mapped[str] = mapped_column(String(36), ForeignKey("evidence.id"), nullable=False)
     department: Mapped[Department] = mapped_column(SAEnum(Department, native_enum=False), nullable=False)
@@ -275,6 +282,7 @@ class SourceTimelineEvent(Base):
     __tablename__ = "source_timeline_events"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
+    analysis_version: Mapped[int] = mapped_column(Integer, default=1, index=True)
     source_timeline_id: Mapped[str] = mapped_column(String(36), ForeignKey("source_timelines.id"), nullable=False)
     observation_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("observations.id"), nullable=True)
     event_type: Mapped[str] = mapped_column(String(128), nullable=False)
@@ -296,6 +304,7 @@ class CorrelatedTimelineEvent(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
     case_id: Mapped[str] = mapped_column(String(36), ForeignKey("cases.id"), nullable=False)
+    analysis_version: Mapped[int] = mapped_column(Integer, default=1, index=True)
     event_time: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     time_confidence: Mapped[TimeConfidence] = mapped_column(SAEnum(TimeConfidence, native_enum=False), default=TimeConfidence.UNKNOWN)
     time_window_min: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -317,6 +326,7 @@ class EntityRelationship(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
     case_id: Mapped[str] = mapped_column(String(36), ForeignKey("cases.id"), nullable=False)
+    analysis_version: Mapped[int] = mapped_column(Integer, default=1, index=True)
     from_entity_id: Mapped[str] = mapped_column(String(36), ForeignKey("candidate_entities.id"), nullable=False)
     to_entity_id: Mapped[str] = mapped_column(String(36), ForeignKey("candidate_entities.id"), nullable=False)
     relationship: Mapped[str] = mapped_column(String(128), nullable=False)
@@ -332,6 +342,7 @@ class Hypothesis(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
     case_id: Mapped[str] = mapped_column(String(36), ForeignKey("cases.id"), nullable=False)
+    analysis_version: Mapped[int] = mapped_column(Integer, default=1, index=True)
     label: Mapped[str] = mapped_column(String(128), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     sequence: Mapped[list] = mapped_column(JSON, default=list) # [{step, entity_ids, evidence_ids, time}]
@@ -357,6 +368,7 @@ class GapConflict(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
     case_id: Mapped[str] = mapped_column(String(36), ForeignKey("cases.id"), nullable=False)
+    analysis_version: Mapped[int] = mapped_column(Integer, default=1, index=True)
     gc_type: Mapped[GapConflictType] = mapped_column(SAEnum(GapConflictType, native_enum=False), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     significance: Mapped[Significance] = mapped_column(SAEnum(Significance, native_enum=False), default=Significance.MEDIUM)
@@ -377,6 +389,7 @@ class Verification(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
     case_id: Mapped[str] = mapped_column(String(36), ForeignKey("cases.id"), nullable=False)
+    analysis_version: Mapped[int] = mapped_column(Integer, default=1, index=True)
     target_type: Mapped[TargetType] = mapped_column(SAEnum(TargetType, native_enum=False), nullable=False)
     target_id: Mapped[str] = mapped_column(String(36), nullable=False)
     action: Mapped[VerificationAction] = mapped_column(SAEnum(VerificationAction, native_enum=False), nullable=False)
@@ -410,6 +423,7 @@ class Report(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
     case_id: Mapped[str] = mapped_column(String(36), ForeignKey("cases.id"), nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False)
+    analysis_version: Mapped[int] = mapped_column(Integer, default=1, index=True)
     report_data: Mapped[dict] = mapped_column(JSON, nullable=False)
     generated_by: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
     generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)

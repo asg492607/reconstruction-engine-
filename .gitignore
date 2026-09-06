@@ -16,3 +16,4 @@ firebase_service_account.json
 frontend/node_modules/
 frontend/dist/
 test_evidence_assets/
+test_evidence_assets_multimodal_new/

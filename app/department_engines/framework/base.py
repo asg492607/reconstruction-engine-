@@ -68,8 +68,20 @@ class EngineDefinition(BaseModel):
     resource_budget: Optional[Any] = Field(default=None, exclude=True)     # EngineResourceBudget
 
 
+class AnalysisRunContext(BaseModel):
+    case_id: str
+    analysis_version: int = 1
+    analysis_run_id: str = Field(default_factory=lambda: f"RUN_{uuid.uuid4().hex[:8].upper()}")
+    evidence_manifest: List[Any] = Field(default_factory=list)
+    execution_records: Dict[str, Any] = Field(default_factory=dict)
+    persisted_record_ids: Dict[str, List[str]] = Field(default_factory=dict)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
 class EngineContext(BaseModel):
     case_id: str
+    analysis_version: int = 1
+    analysis_run_id: str = Field(default_factory=lambda: f"RUN_{uuid.uuid4().hex[:8].upper()}")
     case_title: Optional[str] = None
     specific_offense: Optional[str] = None
     incident_location: Optional[str] = None
@@ -77,11 +89,14 @@ class EngineContext(BaseModel):
     prior_results: Dict[str, Any] = Field(default_factory=dict)  # Outputs from prerequisite engines keyed by engine_id
     shared_state: Dict[str, Any] = Field(default_factory=dict)   # Additional runtime data
     user_id: Optional[str] = None
+    run_context: Optional[AnalysisRunContext] = None
 
 
 class EngineExecutionRecord(BaseModel):
     execution_id: str = Field(default_factory=lambda: f"exec_{uuid.uuid4().hex[:12]}")
     case_id: str
+    analysis_version: int = 1
+    analysis_run_id: Optional[str] = None
     evidence_ids: List[str] = Field(default_factory=list)
     engine_id: str
     engine_version: str

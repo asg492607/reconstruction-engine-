@@ -118,12 +118,15 @@ def _stage_evidence_support(
             ids = val if isinstance(val, list) else [val]
             for cited_id in ids:
                 # Accept exhibit IDs, engine-reference strings, or descriptive strings
-                cited_str = str(cited_id)
-                if (
-                    cited_str
-                    and len(cited_str) == 36          # UUID length check
-                    and cited_str not in valid_evidence_ids
-                ):
+                cited_str = str(cited_id).strip()
+                if not cited_str or not valid_evidence_ids:
+                    continue
+                # If cited string looks like an exhibit ID (UUID or starts with ev_/ex_/etc.)
+                is_exhibit_pattern = (
+                    len(cited_str) == 36 or
+                    cited_str.lower().startswith(("ev_", "ex_", "exhibit_", "evidence_"))
+                )
+                if is_exhibit_pattern and cited_str not in valid_evidence_ids:
                     violations.append(
                         f"Output[{idx}].{cf} references nonexistent exhibit ID '{cited_str}'."
                     )

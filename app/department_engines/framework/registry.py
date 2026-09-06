@@ -71,8 +71,34 @@ class EngineRegistry:
                     graph[dep].append(eid)
                     in_degree[eid] += 1
 
-        # 3. Kahn's Algorithm
+        def _tier_weight(eid: str) -> int:
+            if eid.startswith("E0"):
+                return 10
+            if eid.startswith("I") or (eid.startswith("F") and not eid.startswith("FI")) or eid.startswith("FI"):
+                return 20
+            if eid in ("X01", "X02"):
+                return 30
+            if eid == "X03":
+                return 40
+            if eid == "X04":
+                return 50
+            if eid == "X05":
+                return 60
+            if eid == "X06":
+                return 70
+            if eid == "R01":
+                return 80
+            if eid == "R02":
+                return 90
+            if eid == "R03":
+                return 100
+            if eid == "R04":
+                return 110
+            return 120
+
+        # 3. Kahn's Algorithm with Tier-Level Prioritization
         queue = [eid for eid, deg in in_degree.items() if deg == 0]
+        queue.sort(key=lambda x: (_tier_weight(x), x))
         sorted_order: List[str] = []
 
         while queue:
@@ -82,6 +108,7 @@ class EngineRegistry:
                 in_degree[neighbor] -= 1
                 if in_degree[neighbor] == 0:
                     queue.append(neighbor)
+                    queue.sort(key=lambda x: (_tier_weight(x), x))
 
         if len(sorted_order) != len(required_set):
             raise CyclicDependencyError("Cyclic dependency detected in engine execution graph.")
@@ -111,40 +138,51 @@ class EngineRegistry:
             )
             return record
 
-        # Verify prerequisites in context.prior_results
-        for dep in engine.dependencies:
-            dep_rec = context.prior_results.get(dep)
-            if not dep_rec or getattr(dep_rec, "status", None) not in [EngineExecutionResult.SUCCESS, EngineExecutionResult.PARTIAL]:
-                # If prerequisite failed, had no usable output, or missing, engine is BLOCKED
-                path = "BLOCKED_PREREQUISITE_FAILED"
-                dep_status = getattr(dep_rec, "status", "MISSING")
-                if dep_status == EngineExecutionResult.NO_USABLE_OUTPUT:
-                    reason = f"Prerequisite engine '{dep}' produced NO_USABLE_OUTPUT ({dep_rec.failure_reason or 'no usable features'})."
-                    path = "BLOCKED_PREREQUISITE_NO_USABLE_OUTPUT"
-                elif dep_status == EngineExecutionResult.BLOCKED:
-                    reason = f"Prerequisite engine '{dep}' was BLOCKED ({dep_rec.failure_reason or 'prerequisite unavailable'})."
-                elif dep_status == EngineExecutionResult.FAILED:
-                    reason = f"Prerequisite engine '{dep}' FAILED ({dep_rec.failure_reason or 'engine error'})."
-                else:
-                    reason = f"Prerequisite engine '{dep}' not completed successfully."
-                record = EngineExecutionRecord(
-                    case_id=case_id,
-                    evidence_ids=[getattr(evidence, "id", "")] if evidence else [],
-                    engine_id=engine_id,
-                    engine_version=engine.definition.engine_version,
-                    execution_mode=engine.execution_mode,
-                    status=EngineExecutionResult.BLOCKED,
-                    confidence=None,
-                    actual_execution_path=path,
-                    actual_execution_mode="BLOCKED",
-                    failure_reason=reason
-                )
-                return record
+        # Verify prerequisites in context.prior_results (Intelligence engines and R01 evaluate negative cases directly)
+        if not engine_id.startswith("X") and engine_id != "R01":
+            for dep in engine.dependencies:
+                dep_rec = context.prior_results.get(dep)
+                if not dep_rec or getattr(dep_rec, "status", None) not in [EngineExecutionResult.SUCCESS, EngineExecutionResult.PARTIAL]:
+                    # If prerequisite failed, had no usable output, or missing, engine is BLOCKED
+                    path = "BLOCKED_PREREQUISITE_FAILED"
+                    dep_status = getattr(dep_rec, "status", "MISSING")
+                    if dep_status == EngineExecutionResult.NO_USABLE_OUTPUT:
+                        reason = f"Prerequisite engine '{dep}' produced NO_USABLE_OUTPUT ({dep_rec.failure_reason or 'no usable features'})."
+                        path = "BLOCKED_PREREQUISITE_NO_USABLE_OUTPUT"
+                    elif dep_status == EngineExecutionResult.BLOCKED:
+                        reason = f"Prerequisite engine '{dep}' was BLOCKED ({dep_rec.failure_reason or 'prerequisite unavailable'})."
+                    elif dep_status == EngineExecutionResult.FAILED:
+                        reason = f"Prerequisite engine '{dep}' FAILED ({dep_rec.failure_reason or 'engine error'})."
+                    else:
+                        reason = f"Prerequisite engine '{dep}' not completed successfully."
+                    record = EngineExecutionRecord(
+                        case_id=case_id,
+                        evidence_ids=[getattr(evidence, "id", "")] if evidence else [],
+                        engine_id=engine_id,
+                        engine_version=engine.definition.engine_version,
+                        execution_mode=engine.execution_mode,
+                        status=EngineExecutionResult.BLOCKED,
+                        confidence=None,
+                        actual_execution_path=path,
+                        actual_execution_mode="BLOCKED",
+                        failure_reason=reason
+                    )
+                    return record
+
+        timeout_ms = 30000
+        if getattr(engine.definition, "resource_budget", None) and getattr(engine.definition.resource_budget, "max_execution_time_ms", None):
+            timeout_ms = engine.definition.resource_budget.max_execution_time_ms
+        elif getattr(engine.definition, "time_limit_ms", None):
+            timeout_ms = engine.definition.time_limit_ms
+        timeout_sec = max(0.1, timeout_ms / 1000.0)
 
         t0 = time.time()
         start_dt = datetime.now(timezone.utc)
         try:
-            raw_record = await engine.execute(case_id=case_id, evidence=evidence, context=context)
+            raw_record = await asyncio.wait_for(
+                engine.execute(case_id=case_id, evidence=evidence, context=context),
+                timeout=timeout_sec
+            )
             raw_record.completed_at = datetime.now(timezone.utc)
             raw_record.execution_time_ms = int((time.time() - t0) * 1000)
 
@@ -152,6 +190,27 @@ class EngineRegistry:
             validated_record = output_validator.validate(raw_record, engine.definition)
             context.prior_results[engine_id] = validated_record
             return validated_record
+
+        except asyncio.TimeoutError:
+            elapsed_ms = int((time.time() - t0) * 1000)
+            record = EngineExecutionRecord(
+                case_id=case_id,
+                evidence_ids=[getattr(evidence, "id", "")] if evidence else [],
+                engine_id=engine_id,
+                engine_version=engine.definition.engine_version,
+                execution_mode=engine.execution_mode,
+                started_at=start_dt,
+                completed_at=datetime.now(timezone.utc),
+                execution_time_ms=elapsed_ms,
+                status=EngineExecutionResult.TIME_LIMIT_EXCEEDED,
+                actual_execution_path="TIME_LIMIT_EXCEEDED",
+                actual_execution_mode="TIME_LIMIT_EXCEEDED",
+                confidence=None,
+                outputs=[],
+                failure_reason=f"Execution exceeded hard timeout limit of {timeout_ms}ms (elapsed: {elapsed_ms}ms)"
+            )
+            context.prior_results[engine_id] = record
+            return record
 
         except Exception as exc:
             record = EngineExecutionRecord(
