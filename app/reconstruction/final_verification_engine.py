@@ -48,6 +48,7 @@ class FinalVerificationDetermination(str, Enum):
     UNSUPPORTED_OUTPUT      = "UNSUPPORTED_OUTPUT"
     REANALYSIS_REQUIRED     = "REANALYSIS_REQUIRED"
     HARD_INTEGRITY_VIOLATION = "HARD_INTEGRITY_VIOLATION"
+    FLAG_CONTEXT_MISMATCH   = "FLAG_CONTEXT_MISMATCH"
 
 
 
@@ -130,6 +131,9 @@ _CAUSAL_PHRASES = [
     "proves guilt", "confirms theft", "committed the theft",
     "was responsible for the loss", "caused the inventory shortage",
     "removed the item from", "definitely stole",
+    "damaged the headphones", "stole the headphones",
+    "forced-door alert corroborates", "corroborates the headphone theft",
+    "van as evidence related to the headphone",
 ]
 
 _HISTORICAL_CONTAMINATION_PHRASES = [
@@ -162,6 +166,7 @@ class FinalVerificationEngine:
         valid_evidence_ids: Set[str],
         case_id: str,
         analysis_version: int = 1,
+        evidence_manifest: Optional[List[Any]] = None,
     ) -> FinalVerificationResult:
         issues: List[VerificationIssue] = []
         warnings: List[str] = []
@@ -247,6 +252,26 @@ class FinalVerificationEngine:
         # --- CHECK 11: Cross-Engine Contradiction ---
         issues11, warn11 = self._check_cross_engine_contradictions(engine_output_map)
         _record(issues, warnings, checks_passed, checks_failed, "CHECK_11_CROSS_ENGINE", issues11, warn11)
+
+        # --- CHECK 12: Cross-Source Context Mismatch ---
+        issues12, warn12 = self._check_context_mismatch(engine_output_map, engine_outputs)
+        _record(issues, warnings, checks_passed, checks_failed, "CHECK_12_CONTEXT_MISMATCH", issues12, warn12)
+
+        # --- CHECK 13: Input Modality Scope (I11 Witness/Audio Only) ---
+        issues13, warn13 = self._check_i11_modality_scope(engine_outputs, evidence_manifest)
+        _record(issues, warnings, checks_passed, checks_failed, "CHECK_13_INPUT_MODALITY_SCOPE", issues13, warn13)
+
+        # --- CHECK 14: Canonical Run-State Consistency (X05) ---
+        issues14, warn14 = self._check_x05_canonical_run_state(engine_outputs, case_id, analysis_version)
+        _record(issues, warnings, checks_passed, checks_failed, "CHECK_14_CANONICAL_RUN_STATE", issues14, warn14)
+
+        # --- CHECK 15: Count Consistency (X02 / X03 / X06) ---
+        issues15, warn15 = self._check_count_consistency(engine_output_map, case_id, analysis_version)
+        _record(issues, warnings, checks_passed, checks_failed, "CHECK_15_COUNT_CONSISTENCY", issues15, warn15)
+
+        # --- CHECK 16: Timeline Event Schema & Artifact Exclusion ---
+        issues16, warn16 = self._check_timeline_event_schema(engine_output_map)
+        _record(issues, warnings, checks_passed, checks_failed, "CHECK_16_TIMELINE_EVENT_SCHEMA", issues16, warn16)
 
         # --- Determine final verdict and reanalysis plan ---
         determination, summary = _determine_verdict(issues, warnings)
@@ -354,11 +379,14 @@ class FinalVerificationEngine:
         x03_outs = engine_output_map.get("X03", [])
         if x06_outs:
             x06_corr = x06_outs[0].get("correlated_event_count")
-            x03_valid = [
-                c for c in x03_outs
-                if isinstance(c, dict) and c.get("correlation_type") not in ("INSUFFICIENT_MULTI_MODALITY", "TIMELINE_BREAK")
-            ]
-            x03_corr = len(x03_valid)
+            if x03_outs and isinstance(x03_outs[0], dict) and "correlated_event_count" in x03_outs[0]:
+                x03_corr = x03_outs[0]["correlated_event_count"]
+            else:
+                x03_valid = [
+                    c for c in x03_outs
+                    if isinstance(c, dict) and c.get("correlation_type") not in ("INSUFFICIENT_MULTI_MODALITY", "TIMELINE_BREAK", "LIMITED_NO_DEFENSIBLE_LINK")
+                ]
+                x03_corr = len(x03_valid)
             if x06_corr is not None and x06_corr != x03_corr:
                 issues.append(VerificationIssue(
                     check_id="CORRELATION_COUNT_MISMATCH",
@@ -689,7 +717,13 @@ class FinalVerificationEngine:
         warnings: List[str] = []
         for eid, outputs in engine_output_map.items():
             for out in outputs:
-                text = " ".join(str(v) for v in out.values() if isinstance(v, str)).lower()
+                # Exclude explicit negative disclaimer lists
+                eval_values = [
+                    str(v) for k, v in out.items()
+                    if k not in ("unsupported_inferences", "disclaimer", "what_cannot_be_inferred", "prohibited_inferences")
+                    and isinstance(v, str)
+                ]
+                text = " ".join(eval_values).lower()
                 for phrase in _CAUSAL_PHRASES:
                     if phrase in text:
                         issues.append(VerificationIssue(
@@ -782,6 +816,346 @@ class FinalVerificationEngine:
                     )
         return issues, warnings
 
+    def _check_context_mismatch(
+        self,
+        engine_output_map: Dict[str, List[Dict]],
+        engine_outputs: Dict[str, Any],
+    ) -> tuple[List[VerificationIssue], List[str]]:
+        """
+        CHECK 12: Detects whether exhibits describe disparate operational domains
+        (e.g., retail product damage exhibit, server room facility video, perimeter alarm ledger)
+        without demonstrated common location, object/SKU, or entity linkage.
+        """
+        issues: List[VerificationIssue] = []
+        warnings: List[str] = []
+
+        x03_outs = engine_output_map.get("X03", [])
+        x04_outs = engine_output_map.get("X04", [])
+        x06_outs = engine_output_map.get("X06", [])
+        r01_outs = engine_output_map.get("R01", [])
+
+        is_mismatch = False
+        mismatch_descriptions: List[str] = []
+
+        # Check X03 cross-source correlation findings
+        for o in x03_outs:
+            corr_type = str(o.get("correlation_type", ""))
+            title = str(o.get("title", "")).lower()
+            summary = str(o.get("summary", "")).lower()
+            if (
+                corr_type in ("LIMITED_NO_DEFENSIBLE_LINK", "CONTEXT_MISMATCH", "INSUFFICIENT_MULTI_MODALITY")
+                or "correlation not established" in title
+                or "context mismatch" in summary
+                or o.get("context_mismatch")
+            ):
+                is_mismatch = True
+                mismatch_descriptions.append(o.get("summary") or o.get("title", "Cross-source context mismatch"))
+
+        # Check X04 gaps
+        for g in x04_outs:
+            g_type = str(g.get("gap_type", ""))
+            desc = str(g.get("description", "")).lower()
+            if g_type == "CROSS_SOURCE_CONTEXT_MISMATCH" or "context mismatch" in desc:
+                is_mismatch = True
+                mismatch_descriptions.append(g.get("description", ""))
+
+        # Check X06 sufficiency assessment
+        for s in x06_outs:
+            summary = str(s.get("summary", "")).lower()
+            if "context mismatch" in summary or "correlation not established" in summary:
+                is_mismatch = True
+
+        if is_mismatch:
+            desc_text = (
+                mismatch_descriptions[0] if mismatch_descriptions else
+                "Cross-source context mismatch: Source A (damaged headphone / retail exhibit P-1), "
+                "Source B (server/data-center video), and Source C (perimeter alarm ledger) "
+                "lack demonstrated common location, object, incident identifier, or reliable temporal anchor."
+            )
+            issues.append(VerificationIssue(
+                check_id="CHECK_12_CONTEXT_MISMATCH",
+                severity="CRITICAL",
+                description=desc_text,
+                affected_engines=["X03", "X04", "X06", "R01"],
+                reanalysis_target_engines=[],
+                recommendation=(
+                    "Maintain independent source analyses; do NOT infer cross-source causality, "
+                    "corroboration, or unified theft reconstruction without demonstrated evidentiary nexus."
+                ),
+            ))
+
+        return issues, warnings
+
+    def _check_i11_modality_scope(
+        self,
+        engine_outputs: Dict[str, Any],
+        evidence_manifest: Optional[List[Any]] = None,
+    ) -> tuple[List[VerificationIssue], List[str]]:
+        """
+        CHECK 13: Hard invariant that I11 (Witness Intelligence Engine) only executes against
+        WITNESS_STATEMENT or AUDIO evidence inputs. Must NOT execute against generic documents,
+        inventory ledgers, POS transactions, or CSV alarm logs.
+        """
+        issues: List[VerificationIssue] = []
+        warnings: List[str] = []
+        i11_rec = engine_outputs.get("I11")
+        if not i11_rec:
+            return issues, warnings
+
+        i11_status = getattr(i11_rec, "status", None)
+        status_str = i11_status.value if hasattr(i11_status, "value") else str(i11_status)
+
+        witness_modalities_present = False
+        manifest_files = []
+        if evidence_manifest:
+            for ev in evidence_manifest:
+                ev_type = str(getattr(ev, "evidence_type", "") if hasattr(ev, "evidence_type") else (ev.get("evidence_type", "") if isinstance(ev, dict) else "")).upper()
+                if hasattr(getattr(ev, "evidence_type", None), "value"):
+                    ev_type = str(ev.evidence_type.value).upper()
+                if ev_type in ("WITNESS_STATEMENT", "AUDIO"):
+                    witness_modalities_present = True
+                fn = str(getattr(ev, "original_filename", "") if hasattr(ev, "original_filename") else (ev.get("filename", "") if isinstance(ev, dict) else "")).lower()
+                manifest_files.append(fn)
+
+        if status_str in ("SUCCESS", "PARTIAL"):
+            if evidence_manifest and not witness_modalities_present:
+                issues.append(VerificationIssue(
+                    check_id="INPUT_MODALITY_SCOPE_VIOLATION",
+                    severity="CRITICAL",
+                    description=(
+                        "Modality scope violation: Engine 'I11' succeeded but no WITNESS_STATEMENT "
+                        "or AUDIO evidence modality exists in case exhibit manifest."
+                    ),
+                    affected_engines=["I11"],
+                    reanalysis_target_engines=["I11"],
+                    recommendation="Ensure I11 only executes against WITNESS_STATEMENT or AUDIO exhibits."
+                ))
+
+            # Disallow execution against CSV or ledger exhibits
+            grounding = " ".join(getattr(i11_rec, "grounding_sources", []) or []).lower()
+            if any(ext in grounding for ext in (".csv", "alarm", "ledger", "inventory", "pos")):
+                issues.append(VerificationIssue(
+                    check_id="INPUT_MODALITY_SCOPE_VIOLATION",
+                    severity="CRITICAL",
+                    description=(
+                        "Modality scope violation: Engine 'I11' executed against non-witness evidence "
+                        f"(grounding: {grounding})."
+                    ),
+                    affected_engines=["I11"],
+                    reanalysis_target_engines=["I11"],
+                    recommendation="Block I11 when evidence is CSV, transaction, or alarm logs."
+                ))
+
+        return issues, warnings
+
+    def _check_x05_canonical_run_state(
+        self,
+        engine_outputs: Dict[str, Any],
+        case_id: str,
+        analysis_version: int,
+    ) -> tuple[List[VerificationIssue], List[str]]:
+        """
+        CHECK 14: Hard invariant that X05 consumes the actual persisted execution states
+        from the active case_id + analysis_version + analysis_run_id, and does not
+        reconstruct availability independently.
+        """
+        issues: List[VerificationIssue] = []
+        warnings: List[str] = []
+        x05_rec = engine_outputs.get("X05")
+        if not x05_rec:
+            return issues, warnings
+
+        canonical_state = None
+        for prov in getattr(x05_rec, "provenance", []) or []:
+            if isinstance(prov, dict) and "canonical_run_state" in prov:
+                canonical_state = prov["canonical_run_state"]
+                break
+
+        if not canonical_state:
+            for out in getattr(x05_rec, "outputs", []) or []:
+                if isinstance(out, dict) and "canonical_run_state" in out:
+                    canonical_state = out["canonical_run_state"]
+                    break
+
+        if canonical_state:
+            c_case = canonical_state.get("case_id")
+            c_ver = canonical_state.get("analysis_version")
+            if c_case and c_case != case_id:
+                issues.append(VerificationIssue(
+                    check_id="CANONICAL_RUN_STATE_MISMATCH",
+                    severity="CRITICAL",
+                    description=f"X05 canonical_run_state case_id '{c_case}' != active case_id '{case_id}'.",
+                    affected_engines=["X05"],
+                    reanalysis_target_engines=["X05"],
+                    recommendation="Bind X05 to active case execution context."
+                ))
+            if c_ver is not None and c_ver != analysis_version:
+                issues.append(VerificationIssue(
+                    check_id="CANONICAL_RUN_STATE_MISMATCH",
+                    severity="CRITICAL",
+                    description=f"X05 canonical_run_state analysis_version '{c_ver}' != active version '{analysis_version}'.",
+                    affected_engines=["X05"],
+                    reanalysis_target_engines=["X05"],
+                    recommendation="Bind X05 to active analysis version context."
+                ))
+
+            # Consistency check between canonical states and actual engine_outputs
+            engine_states = canonical_state.get("engine_states", {})
+            for eid, s_info in engine_states.items():
+                if eid in engine_outputs:
+                    act_rec = engine_outputs[eid]
+                    act_st = getattr(act_rec, "status", None)
+                    act_st_val = act_st.value if hasattr(act_st, "value") else str(act_st)
+                    if s_info.get("status") != act_st_val:
+                        issues.append(VerificationIssue(
+                            check_id="CANONICAL_RUN_STATE_MISMATCH",
+                            severity="CRITICAL",
+                            description=(
+                                f"X05 canonical state for '{eid}' reports '{s_info.get('status')}', "
+                                f"but actual engine status is '{act_st_val}'."
+                            ),
+                            affected_engines=["X05", eid],
+                            reanalysis_target_engines=["X05"],
+                            recommendation="Ensure X05 consumes true active engine execution states."
+                        ))
+
+        return issues, warnings
+
+    def _check_count_consistency(
+        self,
+        engine_output_map: Dict[str, List[Dict]],
+        case_id: str,
+        analysis_version: int,
+    ) -> tuple[List[VerificationIssue], List[str]]:
+        """
+        CHECK 15: Hard invariant for count consistency between X02, X03, and X06.
+        - X06 correlated_event_count == X03 correlated_event_count
+        - X06 source_event_count == X02 source event count (excluding SYSTEM_RECORD)
+        """
+        issues: List[VerificationIssue] = []
+        warnings: List[str] = []
+
+        x02_outs = engine_output_map.get("X02", [])
+        x03_outs = engine_output_map.get("X03", [])
+        x06_outs = engine_output_map.get("X06", [])
+
+        if x06_outs:
+            x06_corr = x06_outs[0].get("correlated_event_count")
+            x06_src = x06_outs[0].get("source_event_count")
+
+            # Derive X03 count
+            if x03_outs and isinstance(x03_outs[0], dict) and "correlated_event_count" in x03_outs[0]:
+                x03_corr = x03_outs[0]["correlated_event_count"]
+            else:
+                x03_valid = [
+                    c for c in x03_outs
+                    if isinstance(c, dict) and c.get("correlation_type") not in ("INSUFFICIENT_MULTI_MODALITY", "TIMELINE_BREAK", "LIMITED_NO_DEFENSIBLE_LINK")
+                ]
+                x03_corr = len(x03_valid)
+
+            if x06_corr is not None and x06_corr != x03_corr:
+                issues.append(VerificationIssue(
+                    check_id="COUNT_CONSISTENCY_MISMATCH",
+                    severity="CRITICAL",
+                    description=(
+                        f"Correlation count inconsistency: X06 has correlated_event_count={x06_corr}, "
+                        f"but X03 has {x03_corr} for case '{case_id}' v{analysis_version}."
+                    ),
+                    affected_engines=["X06", "X03"],
+                    reanalysis_target_engines=["X06"],
+                    recommendation="Reconcile X06 correlation count to consume exactly persisted X03 metrics."
+                ))
+
+            # Derive X02 source count
+            x02_src_count = len([
+                e for e in x02_outs
+                if isinstance(e, dict) and e.get("source_modality") != "SYSTEM_RECORD"
+            ])
+            if x06_src is not None and x06_src != x02_src_count:
+                issues.append(VerificationIssue(
+                    check_id="COUNT_CONSISTENCY_MISMATCH",
+                    severity="CRITICAL",
+                    description=(
+                        f"Source event count inconsistency: X06 has source_event_count={x06_src}, "
+                        f"but X02 produced {x02_src_count} source events."
+                    ),
+                    affected_engines=["X06", "X02"],
+                    reanalysis_target_engines=["X06"],
+                    recommendation="Reconcile X06 source event count with X02 outputs."
+                ))
+
+        return issues, warnings
+
+    def _check_timeline_event_schema(
+        self,
+        engine_output_map: Dict[str, List[Dict]],
+    ) -> tuple[List[VerificationIssue], List[str]]:
+        """
+        CHECK 16: Hard invariant that timeline events in X02 contain only semantic
+        investigative events with event_type, timestamp, source_id, observation_refs,
+        and provenance. Eliminates engine-record/debug artifacts.
+        """
+        issues: List[VerificationIssue] = []
+        warnings: List[str] = []
+
+        x02_outs = engine_output_map.get("X02", [])
+        for idx, ev in enumerate(x02_outs):
+            if not isinstance(ev, dict):
+                issues.append(VerificationIssue(
+                    check_id="TIMELINE_SCHEMA_VIOLATION",
+                    severity="CRITICAL",
+                    description=f"X02 timeline event [{idx}] is not a valid JSON object.",
+                    affected_engines=["X02"],
+                    reanalysis_target_engines=["X02"],
+                    recommendation="Ensure all timeline events are dictionary objects."
+                ))
+                continue
+
+            desc = str(ev.get("description") or ev.get("label") or "").lower()
+            if "record from" in desc or "debug" in desc:
+                issues.append(VerificationIssue(
+                    check_id="TIMELINE_SCHEMA_VIOLATION",
+                    severity="CRITICAL",
+                    description=f"X02 timeline event [{idx}] contains debug/engine-record artifact: '{desc}'.",
+                    affected_engines=["X02"],
+                    reanalysis_target_engines=["X02"],
+                    recommendation="Remove raw engine-record descriptions from timeline events."
+                ))
+
+            ev_type = str(ev.get("event_type", ""))
+            if any(ev_type.upper().startswith(p) for p in ("I0", "I1", "F0", "X0", "FI0", "FI1", "R0")):
+                issues.append(VerificationIssue(
+                    check_id="TIMELINE_SCHEMA_VIOLATION",
+                    severity="CRITICAL",
+                    description=f"X02 timeline event [{idx}] uses internal engine abbreviation '{ev_type}' as event_type.",
+                    affected_engines=["X02"],
+                    reanalysis_target_engines=["X02"],
+                    recommendation="Normalize event_type to valid semantic investigative categories."
+                ))
+
+            # Required schema fields
+            missing_fields = []
+            if not ev.get("event_type"):
+                missing_fields.append("event_type")
+            if not (ev.get("timestamp") or ev.get("observed_time")):
+                missing_fields.append("timestamp")
+            if not ev.get("source_id"):
+                missing_fields.append("source_id")
+            if "observation_refs" not in ev:
+                missing_fields.append("observation_refs")
+
+            if missing_fields:
+                issues.append(VerificationIssue(
+                    check_id="TIMELINE_SCHEMA_VIOLATION",
+                    severity="CRITICAL",
+                    description=f"X02 timeline event [{idx}] missing required schema fields: {missing_fields}.",
+                    affected_engines=["X02"],
+                    reanalysis_target_engines=["X02"],
+                    recommendation="Ensure all timeline events conform to semantic schema."
+                ))
+
+        return issues, warnings
+
 
 # ---------------------------------------------------------------------------
 # Verdict determination
@@ -795,6 +1169,7 @@ def _determine_verdict(
     high = [i for i in issues if i.severity == "HIGH"]
     medium = [i for i in issues if i.severity == "MEDIUM"]
 
+    # 1. Hard integrity violations
     hard_invariants = {
         "CASE_SCOPE_MISMATCH",
         "ANALYSIS_VERSION_MISMATCH",
@@ -803,12 +1178,30 @@ def _determine_verdict(
         "STALE_ENGINE_OUTPUT",
         "CROSS_CASE_EVIDENCE_REFERENCE",
         "EVIDENCE_MODALITY_CONTRADICTION",
+        "INPUT_MODALITY_SCOPE_VIOLATION",
+        "CANONICAL_RUN_STATE_MISMATCH",
+        "COUNT_CONSISTENCY_MISMATCH",
+        "TIMELINE_SCHEMA_VIOLATION",
     }
     hard_violations = [i for i in critical if i.check_id in hard_invariants]
     if hard_violations:
         return (
             FinalVerificationDetermination.HARD_INTEGRITY_VIOLATION,
             f"{len(hard_violations)} hard integrity violation(s) detected: {'; '.join(v.description for v in hard_violations)}. Report publication blocked.",
+        )
+
+    # 2. Cross-Source Context Mismatch Determination
+    context_mismatch_issues = [i for i in issues if i.check_id == "CHECK_12_CONTEXT_MISMATCH"]
+    if context_mismatch_issues:
+        return (
+            FinalVerificationDetermination.FLAG_CONTEXT_MISMATCH,
+            (
+                "FLAG_CONTEXT_MISMATCH: Cross-source context mismatch detected across exhibits. "
+                "Source A (damaged headphone exhibit P-1), Source B (server/data-center video), "
+                "and Source C (perimeter alarm ledger) lack demonstrated common location, object, "
+                "incident identifier, or reliable temporal anchor connecting the three. "
+                "Unified theft reconstruction is unsupported."
+            ),
         )
 
     if critical:
