@@ -644,7 +644,7 @@ class WitnessIntelligenceEngine(BaseEngine):
             department="INVESTIGATION",
             execution_mode=ExecutionMode.LLM,
             description="Parses witness statements for temporal claims, described actors, actions, and subjective certainty.",
-            accepted_evidence_types=["WITNESS_STATEMENT", "DOCUMENT"],
+            accepted_evidence_types=["WITNESS_STATEMENT", "AUDIO"],
             output_types=["WITNESS_CLAIM"],
             confidence_method="HEURISTIC",
             human_review_policy=ReviewPolicy.REVIEW_REQUIRED
@@ -660,6 +660,18 @@ class WitnessIntelligenceEngine(BaseEngine):
         )
         if not evidence:
             record.status = EngineExecutionResult.NO_USABLE_OUTPUT
+            record.failure_reason = "No evidence exhibit provided to I11."
+            return record
+
+        ev_type = (evidence.evidence_type.value if hasattr(evidence.evidence_type, "value") else str(evidence.evidence_type)).upper() if hasattr(evidence, "evidence_type") else ""
+        filename = str(getattr(evidence, "original_filename", "")).lower()
+
+        # Hard boundary: I11 must ONLY accept witness statement/audio inputs and must NOT execute against generic documents or CSV alarm logs
+        if ev_type not in ["WITNESS_STATEMENT", "AUDIO"] or filename.endswith(".csv") or filename.endswith(".tsv") or "alarm" in filename or "ledger" in filename:
+            record.status = EngineExecutionResult.BLOCKED
+            record.actual_execution_path = "BLOCKED_UNAVAILABLE_MODALITY"
+            record.actual_execution_mode = "BLOCKED"
+            record.failure_reason = f"Modality constraint: I11 only accepts WITNESS_STATEMENT or AUDIO exhibits. Rejected non-testimonial exhibit '{getattr(evidence, 'original_filename', '')}' of type '{ev_type}'."
             return record
 
         meta = getattr(evidence, "metadata_json", {}) or {}
