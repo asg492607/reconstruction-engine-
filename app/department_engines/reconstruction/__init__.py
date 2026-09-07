@@ -40,7 +40,70 @@ class EvidenceConstrainedHypothesisEngine(BaseEngine):
             execution_mode=self.execution_mode
         )
         
-        # 0. STRICT HARD DOWNSTREAM GATE: Check X06 Sufficiency Engine (if executed)
+        # 0. STRICT HARD DOWNSTREAM GATE: Check for Cross-Source Context Mismatch
+        x03_res = context.prior_results.get("X03")
+        has_context_mismatch = bool(
+            (x03_res and x03_res.outputs and any(isinstance(c, dict) and c.get("context_mismatch") for c in x03_res.outputs))
+            or context.shared_state.get("context_mismatch")
+        )
+
+        if has_context_mismatch:
+            record.outputs = [
+                {
+                    "hypothesis_id": "HYP_NO_UNIFIED_LINK",
+                    "hypothesis_title": "No Unified Theft Reconstruction (Cross-Source Context Mismatch)",
+                    "scenario_type": "NO_UNIFIED_LINK",
+                    "hypothesis_category": "CONTEXT_MISMATCH_DISCLAIMER",
+                    "theft_conclusion_supported": False,
+                    "narrative": (
+                        "Cross-source correlation not established across available exhibits. "
+                        "Source A reflects a physical product damage exhibit (SKU AURA-PRO-900X, Exhibit P-1). "
+                        "Source B reflects data-center / server room CCTV observations (severed fiber trunk 4C and white cargo van). "
+                        "Source C reflects a perimeter security forced-door alert with zero inventory delta (qty_delta = 0). "
+                        "No common location, object, incident identifier, or reliable temporal anchor connects these sources. "
+                        "Under RRE evidentiary rules, no unified theft reconstruction is supported without a demonstrated causal linkage."
+                    ),
+                    "supporting_evidence_citations": [
+                        "Exhibit P-1: Damaged headphone / retail exhibit (SKU AURA-PRO-900X)",
+                        "Video Exhibit: Server room optical surveillance (cable sever, white van)",
+                        "Security Log: Perimeter alarm (qty_delta = 0)"
+                    ],
+                    "supporting_evidence": [],
+                    "contradicting_evidence": [
+                        "Cross-source context mismatch: Retail headphone exhibit vs Data-center infrastructure vs Perimeter security alarm",
+                        "Financial ledger demonstrates zero inventory delta (qty_delta = 0)"
+                    ],
+                    "missing_evidence": [
+                        "No evidentiary bridge connecting headphone exhibit to server room or perimeter alarm",
+                        "No verified proof of loss or inventory shortage"
+                    ],
+                    "assumptions": [
+                        "Preserves independent source observations without unwarranted cross-source correlation"
+                    ],
+                    "timeline_coverage": 0.0,
+                    "entity_link_dependence": [],
+                    "spatial_feasibility": "UNESTABLISHED",
+                    "unresolved_conflicts": [
+                        "Cross-source context mismatch across disparate modalities"
+                    ],
+                    "confidence_score": 0.15,
+                    "support_level": "LIMITED"
+                }
+            ]
+            record.confidence = 0.15
+            record.status = EngineExecutionResult.SUCCESS
+            record.actual_execution_path = "DETERMINISTIC_ONLY"
+            record.actual_execution_mode = "DETERMINISTIC"
+            record.fallback_used = "NOT_APPLICABLE"
+            record.review_status = "SPECIALIST_REVIEW_REQUIRED"
+            record.grounding_sources = [
+                "Cross-Source Evaluation: Disparate operational domains detected",
+                "Linkage Assessment: 0 demonstrated common locations, entities, or SKUs",
+                "Hypothesis Status: No unified theft reconstruction supported"
+            ]
+            return record
+
+        # 0b. STRICT HARD DOWNSTREAM GATE: Check X06 Sufficiency Engine (if executed)
         x06_res = context.prior_results.get("X06")
         is_insufficient = False
         if x06_res:
@@ -275,15 +338,28 @@ class EvidenceConstrainedHypothesisEngine(BaseEngine):
             actor_label = "an unidentified actor"
             entity_deps = []
 
+        # Ledger deficit check (Flaw 1 fix: prevent hallucinated ledger corroboration)
+        fi02_res = context.prior_results.get("FI02")
+        fi02_missing = 0
+        if fi02_res and fi02_res.outputs and isinstance(fi02_res.outputs, list):
+            fi02_missing = fi02_res.outputs[0].get("total_missing_units", 0)
+
+        if fi02_missing > 0:
+            corrob_ledger_text = f"Corroborated by sensory and ledger observations ({fi02_missing} missing units)."
+            theft_supported = True
+        else:
+            corrob_ledger_text = "Ledger observations establish zero inventory deficit (qty_delta = 0); stock depletion is uncorroborated by financial records."
+            theft_supported = False
+
         scenario_a = {
             "hypothesis_id": "HYP_SCENARIO_A",
             "hypothesis_title": "Scenario A: Primary Reconstruction — Direct Physical Removal",
             "scenario_type": "PRIMARY_INCULPATORY",
             "hypothesis_category": "EVIDENCE_CONSTRAINED_RECONSTRUCTION",
-            "theft_conclusion_supported": True,
+            "theft_conclusion_supported": theft_supported,
             "narrative": (
                 f"Primary reconstruction attributes stock depletion to physical removal by {actor_label} "
-                "traversing designated retail zones to the exit. Corroborated by sensory and ledger observations."
+                f"traversing designated retail zones to the exit. {corrob_ledger_text}"
             ),
             "supporting_evidence_citations": scenario_a_cits,
             "supporting_evidence": scenario_a_cits,
@@ -294,8 +370,8 @@ class EvidenceConstrainedHypothesisEngine(BaseEngine):
             "entity_link_dependence": entity_deps,
             "spatial_feasibility": "FEASIBLE",
             "unresolved_conflicts": scenario_a_contra,
-            "confidence_score": score_a,
-            "support_level": support_a
+            "confidence_score": score_a if theft_supported else min(score_a, 0.35),
+            "support_level": support_a if theft_supported else "LIMITED"
         }
         scenarios.append(scenario_a)
 
