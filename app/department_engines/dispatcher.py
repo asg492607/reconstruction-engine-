@@ -296,6 +296,7 @@ async def run_case_analysis(
                 context=context
             )
             record.analysis_version = active_version
+            record.analysis_run_id = run_id
             # Evidence Reference Integrity Gate enforcement
             from app.reconstruction.integrity_gate import (
                 validate_evidence_reference_integrity,
@@ -511,55 +512,134 @@ async def run_case_analysis(
         await db.execute(delete(SourceTimelineEvent).where(SourceTimelineEvent.source_timeline_id.in_(st_ids)))
         await db.execute(delete(SourceTimeline).where(SourceTimeline.id.in_(st_ids)))
 
+    x03_rec = context.prior_results.get("X03")
+    is_context_mismatch = bool(
+        (x03_rec and x03_rec.outputs and any(c.get("context_mismatch") for c in x03_rec.outputs))
+        or context.shared_state.get("context_mismatch")
+    )
+
     x02_rec = context.prior_results.get("X02")
     if x02_rec and x02_rec.outputs:
-        primary_st = SourceTimeline(
-            id=f"st_{uuid.uuid4().hex[:12]}",
-            case_id=case.id,
-            analysis_version=active_version,
-            source_label="Multi-Modal Chronology",
-            evidence_id=evidence_list[0].id if evidence_list else case.id,
-            department=Department.CORRELATED
-        )
-        db.add(primary_st)
-        analysis_run_ctx.persisted_record_ids.setdefault("source_timelines", []).append(primary_st.id)
+        if is_context_mismatch:
+            # Group events into independent source-local timelines (no unified timeline)
+            modality_groups = {
+                "IMAGE": {"label": "Forensic Photography Timeline (Exhibit P-1 / SKU AURA-PRO-900X)", "dept": Department.FORENSIC, "events": []},
+                "VIDEO": {"label": "CCTV Surveillance Timeline (Server Room / Cable Cut)", "dept": Department.INVESTIGATION, "events": []},
+                "CSV": {"label": "Security Access Log Timeline (Perimeter Alarm)", "dept": Department.FINANCIAL, "events": []},
+            }
+            for ev in x02_rec.outputs:
+                if not isinstance(ev, dict):
+                    continue
+                s_mod = str(ev.get("source_modality", "")).upper()
+                desc = str(ev.get("description", "")).lower()
 
-        for idx, ev in enumerate(x02_rec.outputs):
-            if not isinstance(ev, dict):
-                continue
-            raw_ts = ev.get("observed_time") or ev.get("timestamp")
-            parsed_dt = None
-            if raw_ts:
-                try:
-                    parsed_dt = datetime.fromisoformat(str(raw_ts).replace("Z", "+00:00"))
-                except Exception:
-                    pass
+                if "PHOTO" in s_mod or "IMAGE" in s_mod or "F01" in s_mod or "photo" in desc:
+                    modality_groups["IMAGE"]["events"].append(ev)
+                elif "CCTV" in s_mod or "VIDEO" in s_mod or "I12" in s_mod or "camera" in desc or "motion" in desc:
+                    modality_groups["VIDEO"]["events"].append(ev)
+                elif "ALARM" in s_mod or "POS" in s_mod or "TRANSACTION" in s_mod or "CSV" in s_mod or "door" in desc:
+                    modality_groups["CSV"]["events"].append(ev)
+                else:
+                    modality_groups["VIDEO"]["events"].append(ev)
 
-            ev_key = ev.get("event_id")
-            db_ev_id = f"{primary_st.id}_{ev_key}" if ev_key else f"ste_{uuid.uuid4().hex[:12]}"
-            st_ev = SourceTimelineEvent(
-                id=db_ev_id,
+            for group_key, group_data in modality_groups.items():
+                if not group_data["events"]:
+                    continue
+                matching_ev_id = evidence_list[0].id if evidence_list else case.id
+                for ev_item in evidence_list:
+                    fn = str(getattr(ev_item, "original_filename", "")).lower()
+                    if group_key == "IMAGE" and ("png" in fn or "jpg" in fn or "headphone" in fn or "screenshot" in fn):
+                        matching_ev_id = ev_item.id
+                        break
+                    elif group_key == "VIDEO" and ("mp4" in fn or "mov" in fn or "video" in fn or "generate" in fn):
+                        matching_ev_id = ev_item.id
+                        break
+                    elif group_key == "CSV" and ("csv" in fn or "log" in fn or "ledger" in fn):
+                        matching_ev_id = ev_item.id
+                        break
+
+                st_obj = SourceTimeline(
+                    id=f"st_{uuid.uuid4().hex[:12]}",
+                    case_id=case.id,
+                    analysis_version=active_version,
+                    source_label=group_data["label"],
+                    evidence_id=matching_ev_id,
+                    department=group_data["dept"]
+                )
+                db.add(st_obj)
+                analysis_run_ctx.persisted_record_ids.setdefault("source_timelines", []).append(st_obj.id)
+
+                for idx, ev in enumerate(group_data["events"]):
+                    raw_ts = ev.get("observed_time") or ev.get("timestamp")
+                    parsed_dt = None
+                    if raw_ts:
+                        try:
+                            parsed_dt = datetime.fromisoformat(str(raw_ts).replace("Z", "+00:00"))
+                        except Exception:
+                            pass
+                    ev_key = ev.get("event_id")
+                    db_ev_id = f"{st_obj.id}_{ev_key}" if ev_key else f"ste_{uuid.uuid4().hex[:12]}"
+                    st_ev = SourceTimelineEvent(
+                        id=db_ev_id,
+                        analysis_version=active_version,
+                        source_timeline_id=st_obj.id,
+                        event_type=ev.get("event_type", "OBSERVATION"),
+                        description=ev.get("description") or ev.get("label") or "Timeline observation",
+                        observed_time_raw=str(raw_ts) if raw_ts else None,
+                        event_time=parsed_dt,
+                        time_confidence=TimeConfidence.EXACT if ev.get("time_confidence") == "EXACT" else TimeConfidence.ESTIMATED,
+                        entity_ids=ev.get("entity_refs", []),
+                        sequence_order=idx
+                    )
+                    db.add(st_ev)
+                    analysis_run_ctx.persisted_record_ids.setdefault("source_timeline_events", []).append(st_ev.id)
+        else:
+            primary_st = SourceTimeline(
+                id=f"st_{uuid.uuid4().hex[:12]}",
+                case_id=case.id,
                 analysis_version=active_version,
-                source_timeline_id=primary_st.id,
-                event_type=ev.get("event_type", "OBSERVATION"),
-                description=ev.get("description") or ev.get("label") or "Timeline observation",
-                observed_time_raw=str(raw_ts) if raw_ts else None,
-                event_time=parsed_dt,
-                time_confidence=TimeConfidence.EXACT if ev.get("time_confidence") == "EXACT" else TimeConfidence.ESTIMATED,
-                entity_ids=ev.get("entity_refs", []),
-                sequence_order=idx
+                source_label="Multi-Modal Chronology",
+                evidence_id=evidence_list[0].id if evidence_list else case.id,
+                department=Department.CORRELATED
             )
-            db.add(st_ev)
-            analysis_run_ctx.persisted_record_ids.setdefault("source_timeline_events", []).append(st_ev.id)
+            db.add(primary_st)
+            analysis_run_ctx.persisted_record_ids.setdefault("source_timelines", []).append(primary_st.id)
+
+            for idx, ev in enumerate(x02_rec.outputs):
+                if not isinstance(ev, dict):
+                    continue
+                raw_ts = ev.get("observed_time") or ev.get("timestamp")
+                parsed_dt = None
+                if raw_ts:
+                    try:
+                        parsed_dt = datetime.fromisoformat(str(raw_ts).replace("Z", "+00:00"))
+                    except Exception:
+                        pass
+
+                ev_key = ev.get("event_id")
+                db_ev_id = f"{primary_st.id}_{ev_key}" if ev_key else f"ste_{uuid.uuid4().hex[:12]}"
+                st_ev = SourceTimelineEvent(
+                    id=db_ev_id,
+                    analysis_version=active_version,
+                    source_timeline_id=primary_st.id,
+                    event_type=ev.get("event_type", "OBSERVATION"),
+                    description=ev.get("description") or ev.get("label") or "Timeline observation",
+                    observed_time_raw=str(raw_ts) if raw_ts else None,
+                    event_time=parsed_dt,
+                    time_confidence=TimeConfidence.EXACT if ev.get("time_confidence") == "EXACT" else TimeConfidence.ESTIMATED,
+                    entity_ids=ev.get("entity_refs", []),
+                    sequence_order=idx
+                )
+                db.add(st_ev)
+                analysis_run_ctx.persisted_record_ids.setdefault("source_timeline_events", []).append(st_ev.id)
 
     # 3. Clean slate & sync Correlated Timeline Events (X03)
     await db.execute(delete(CorrelatedTimelineEvent).where(CorrelatedTimelineEvent.case_id == case.id, CorrelatedTimelineEvent.analysis_version == active_version))
-    x03_rec = context.prior_results.get("X03")
-    if x03_rec and x03_rec.outputs:
+    if x03_rec and x03_rec.outputs and not is_context_mismatch:
         for corr in x03_rec.outputs:
             if not isinstance(corr, dict):
                 continue
-            if corr.get("correlation_type") in ("INSUFFICIENT_MULTI_MODALITY", "TIMELINE_BREAK"):
+            if corr.get("correlation_type") in ("INSUFFICIENT_MULTI_MODALITY", "TIMELINE_BREAK", "LIMITED_NO_DEFENSIBLE_LINK"):
                 continue
 
             w_start = corr.get("window_start")
@@ -694,7 +774,8 @@ async def run_case_analysis(
             engine_outputs=context.prior_results,
             valid_evidence_ids=valid_ev_ids_for_fve,
             case_id=case.id,
-            analysis_version=active_version
+            analysis_version=active_version,
+            evidence_manifest=manifest_items
         )
         final_verification = fve_result.to_dict()
     except Exception as fve_err:
