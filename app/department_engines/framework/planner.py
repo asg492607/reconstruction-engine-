@@ -48,7 +48,7 @@ class DynamicAnalysisPlanner:
         has_audio = bool(evidence_types.intersection({"AUDIO", "WAV", "MP3"}))
         has_inventory = bool(evidence_types.intersection({"INVENTORY_RECORD", "INVENTORY", "CSV"}))
         has_pos = bool(evidence_types.intersection({"TRANSACTION_RECORD", "POS"}))
-        has_witness = bool(evidence_types.intersection({"WITNESS_STATEMENT", "DOCUMENT"}))
+        has_witness = bool(evidence_types.intersection({"WITNESS_STATEMENT"}))
         has_vehicle_rec = bool(evidence_types.intersection({"VEHICLE_RECORD"}))
 
         required: List[str] = []
