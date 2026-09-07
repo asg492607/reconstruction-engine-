@@ -186,7 +186,14 @@ class AIClient:
                 timeout=timeout
             )
 
+        prov = self.get_active_provider_info()
         if not raw_output:
+            self.last_execution_info = {
+                "provider": prov.get("provider", "UNAVAILABLE"),
+                "model": prov.get("model", "NONE"),
+                "execution_path": "BLOCKED_LLM_FAILED",
+                "fallback_used": "BLOCKED"
+            }
             return None
 
         try:
@@ -197,9 +204,22 @@ class AIClient:
                 clean = clean[3:]
             if clean.endswith("```"):
                 clean = clean[:-3]
-            return json.loads(clean.strip())
+            parsed = json.loads(clean.strip())
+            self.last_execution_info = {
+                "provider": prov.get("provider", "gemini"),
+                "model": prov.get("model", settings.LLM_MODEL),
+                "execution_path": "REAL_LLM",
+                "fallback_used": "NO"
+            }
+            return parsed
         except Exception as e:
             logger.warning(f"Failed to parse JSON response: {e}\nRaw: {raw_output}")
+            self.last_execution_info = {
+                "provider": prov.get("provider", "gemini"),
+                "model": prov.get("model", settings.LLM_MODEL),
+                "execution_path": "BLOCKED_LLM_FAILED",
+                "fallback_used": "BLOCKED"
+            }
             return None
 
     # ---------------------------------------------------------------------------

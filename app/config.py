@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     GEMINI_API_KEYS: str = ""
     OPENAI_API_KEY: str = ""
     OPENAI_BASE_URL: str = "https://api.openai.com/v1"
-    LLM_MODEL: str = "gemini-2.0-flash-lite"
+    LLM_MODEL: str = "gemini-2.5-flash"
     LLM_PROVIDER: Literal["GEMINI", "OPENAI", "LOCAL", "AUTO"] = "AUTO"
 
     def get_gemini_api_keys(self) -> list[str]:
