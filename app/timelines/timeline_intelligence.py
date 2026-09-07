@@ -142,7 +142,12 @@ class SourceLocalTimelineBuilder:
         """
         timelines: Dict[str, List[SourceEvent]] = {}
 
+        # Only engines that emit empirical physical/sensor/ledger timeline observations
+        TIMELINE_PRODUCING_ENGINES = {"I12", "FI04", "FI01", "I11", "F01"}
+
         for engine_id, record in engine_outputs.items():
+            if engine_id not in TIMELINE_PRODUCING_ENGINES:
+                continue
             outputs = getattr(record, "outputs", None) or []
             ev_ids = getattr(record, "evidence_ids", []) or []
             source_id = ev_ids[0] if ev_ids else engine_id
@@ -152,9 +157,13 @@ class SourceLocalTimelineBuilder:
             for idx, item in enumerate(outputs):
                 if not isinstance(item, dict):
                     continue
-                ts = _parse_timestamp(
-                    item.get("timestamp") or item.get("observed_time") or item.get("event_time") or item.get("stated_time")
-                )
+                raw_ts = item.get("timestamp") or item.get("observed_time") or item.get("event_time") or item.get("stated_time")
+                if not raw_ts:
+                    continue
+                ts = _parse_timestamp(raw_ts)
+                if not ts:
+                    continue
+
                 desc = (
                     item.get("description")
                     or item.get("label")
@@ -162,32 +171,49 @@ class SourceLocalTimelineBuilder:
                     or item.get("event_name")
                     or item.get("observation")
                     or ""
-                )
+                ).strip()
+
+                # Semantic description resolution for structured items
                 if not desc:
                     if "transaction_id" in item:
-                        desc = f"POS Transaction {item.get('transaction_id')} terminal {item.get('terminal_id', 'TERM')}"
-                    elif "sku" in item:
-                        desc = f"Stock item SKU {item.get('sku')} variance: physical {item.get('physical_count')}, expected {item.get('expected_stock_count')}"
-                    elif "finding" in item:
-                        desc = str(item.get("finding"))
+                        desc = f"POS Transaction {item.get('transaction_id')} on terminal {item.get('terminal_id', 'TERM')}"
+                    elif "event_type" in item and item.get("event_type") in ("FORCED_DOOR_ALERT", "PERIMETER_ALARM"):
+                        desc = f"Security alarm event: {item.get('event_type')}"
                     elif "actor_described" in item:
-                        desc = f"Witness statement: observed {item.get('actor_described')}"
+                        desc = f"Witness observation of {item.get('actor_described')}"
                     else:
-                        desc = f"{src_type} record from {source_id[:8]}"
+                        # Do NOT fabricate generic debug record strings like "I1 record from ..."
+                        continue
+
+                # Exclude debug/engine artifacts
+                if "record from" in desc.lower() or desc.lower().startswith("engine record"):
+                    continue
+
+                ev_type = item.get("event_type") or item.get("observation_type")
+                if not ev_type or ev_type in ("I1", "F0", "X0", "I01", "I02", "I06", "F02", "F03", "X01", "OBSERVATION"):
+                    if "transaction" in desc.lower():
+                        ev_type = "POS_TRANSACTION"
+                    elif "alarm" in desc.lower() or "door" in desc.lower():
+                        ev_type = "PERIMETER_ALARM"
+                    elif "photo" in desc.lower():
+                        ev_type = "FORENSIC_PHOTOGRAPHY"
+                    elif "witness" in desc.lower():
+                        ev_type = "WITNESS_TESTIMONIAL"
+                    else:
+                        ev_type = "INVESTIGATIVE_OBSERVATION"
 
                 events.append(SourceEvent(
                     event_id=item.get("event_id") or f"{engine_id}_{idx}",
                     source_id=source_id,
                     source_type=src_type,
                     timestamp=ts,
-                    event_type=item.get("observation_type") or item.get("event_type") or engine_id,
+                    event_type=ev_type,
                     description=desc,
                     entity_refs=item.get("entity_refs", []) or ([item.get("actor_id")] if item.get("actor_id") else []),
                     raw_data=item,
                 ))
 
             if events:
-                # Sort by timestamp (None timestamps go last)
                 events.sort(key=lambda e: e.timestamp or datetime.max.replace(tzinfo=timezone.utc))
                 timelines.setdefault(source_id, []).extend(events)
 
