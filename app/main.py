@@ -83,7 +83,7 @@ if os.path.exists(frontend_assets):
 elif os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
-@app.get("/", tags=["UI"])
+@app.api_route("/", methods=["GET", "HEAD"], tags=["UI"])
 async def serve_dashboard():
     # Check for Vite built frontend first
     dist_index = os.path.join(frontend_dist, "index.html")
@@ -112,7 +112,7 @@ async def serve_dashboard():
         }
     }
 
-@app.get("/health", tags=["System"])
+@app.api_route("/health", methods=["GET", "HEAD"], tags=["System"])
 async def health_check():
     return {
         "status": "healthy",
