@@ -32,29 +32,38 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
 
   if (!isOpen) return null;
 
-  const handleLogin = async (e) => {
+  const handleLogin = async (e, directEmail, directPassword) => {
     e?.preventDefault();
     setLoading(true);
     setError(null);
+    const loginEmail = directEmail || email;
+    const loginPass = directPassword || password;
+
     try {
-      // 1. First attempt Firebase Auth
+      // 1. First attempt backend standard authentication (local DB, pre-seeded demo accounts)
+      let backendSuccess = false;
       try {
-        const userCred = await signInWithEmailAndPassword(auth, email, password);
+        const data = await api.auth.login(loginEmail, loginPass);
+        onAuthSuccess(data);
+        onClose();
+        backendSuccess = true;
+        return;
+      } catch {
+        // Not a standard backend account, proceed to Firebase Auth
+      }
+
+      // 2. Fallback to Firebase Auth if direct backend authentication was not matched
+      if (!backendSuccess && auth) {
+        const userCred = await signInWithEmailAndPassword(auth, loginEmail, loginPass);
         const idToken = await userCred.user.getIdToken();
         const syncResult = await api.auth.firebaseSync(idToken, role, department, fullName || userCred.user.displayName);
         onAuthSuccess(syncResult);
         onClose();
-        return;
-      } catch (fbErr) {
-        console.warn("Firebase direct sign-in fallback to backend standard auth:", fbErr.message);
       }
-
-      // 2. Fallback to direct backend auth (e.g. for pre-seeded test accounts)
-      const data = await api.auth.login(email, password);
-      onAuthSuccess(data);
-      onClose();
     } catch (err) {
-      setError(err.message || "Failed to sign in. Please verify credentials.");
+      setError(err.message?.includes('auth/invalid-credential') 
+        ? "Invalid email or password. Please verify your credentials or use a 1-Click Demo Account." 
+        : (err.message || "Failed to sign in. Please verify credentials."));
     } finally {
       setLoading(false);
     }

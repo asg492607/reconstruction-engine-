@@ -11,7 +11,11 @@ import {
   X,
   Filter,
   CheckCircle,
-  Eye
+  Eye,
+  Sparkles,
+  DollarSign,
+  Calendar,
+  Barcode
 } from 'lucide-react';
 import { api } from '../../api';
 
@@ -20,6 +24,8 @@ export default function EvidenceVault({ caseId, evidence = [], onRefresh }) {
   const [filterDept, setFilterDept] = useState('ALL');
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrData, setOcrData] = useState(null);
 
   // Form states
   const [file, setFile] = useState(null);
@@ -158,6 +164,20 @@ export default function EvidenceVault({ caseId, evidence = [], onRefresh }) {
                       {(item.description || item.classification_notes) && (
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px', paddingLeft: '24px' }}>
                           {item.description || item.classification_notes}
+                        </div>
+                      )}
+                      {item.metadata_json?.ocr_data && (
+                        <div style={{ marginTop: '4px', paddingLeft: '24px', display: 'flex', gap: '6px', alignItems: 'center' }}>
+                          <span className="badge badge-purple" style={{ fontSize: '0.68rem', padding: '1px 6px' }}>
+                            <Sparkles size={10} style={{ marginRight: '3px' }} />
+                            OCR: {item.metadata_json.ocr_data.document_type || 'VERIFIED'}
+                            {item.metadata_json.ocr_data.total_amount ? ` • ${item.metadata_json.ocr_data.total_amount}` : ''}
+                          </span>
+                          {item.metadata_json.ocr_data.forensic_flags?.length > 0 && (
+                            <span className="badge badge-rose" style={{ fontSize: '0.65rem', padding: '1px 5px' }}>
+                              ⚠️ {item.metadata_json.ocr_data.forensic_flags.length} ANOMALIES
+                            </span>
+                          )}
                         </div>
                       )}
                     </td>
@@ -413,11 +433,81 @@ export default function EvidenceVault({ caseId, evidence = [], onRefresh }) {
                 <CheckCircle size={16} />
                 <span>Evidence seal unbroken. Cryptographic hash verified.</span>
               </div>
+
+              {/* Forensic OCR Section */}
+              <div style={{ borderTop: '1px solid var(--border-light)', paddingTop: '14px', marginTop: '4px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-main)' }}>
+                    <Sparkles size={15} color="var(--primary)" />
+                    Document & OCR Intelligence
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!caseId || !selectedItem?.id) return;
+                      setOcrLoading(true);
+                      try {
+                        const res = await api.ocr.runEvidence(caseId, selectedItem.id);
+                        setOcrData(res.ocr_result);
+                        if (onRefresh) onRefresh();
+                      } catch (err) {
+                        alert("OCR failed: " + err.message);
+                      } finally {
+                        setOcrLoading(false);
+                      }
+                    }}
+                    disabled={ocrLoading}
+                    className="btn btn-primary btn-sm"
+                    style={{ fontSize: '0.75rem', padding: '5px 10px' }}
+                  >
+                    {ocrLoading ? "Scanning..." : "Run Forensic OCR"}
+                  </button>
+                </div>
+
+                {(ocrData || selectedItem?.metadata_json?.ocr_data) ? (
+                  (() => {
+                    const ocr = ocrData || selectedItem?.metadata_json?.ocr_data;
+                    return (
+                      <div style={{ backgroundColor: 'var(--bg-subtle)', borderRadius: 'var(--radius-md)', padding: '10px 12px', fontSize: '0.78rem', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ fontWeight: 600, color: 'var(--primary)' }}>Type: {ocr.document_type || "DOCUMENT"}</span>
+                          <span style={{ color: '#16a34a', fontWeight: 700 }}>{((ocr.confidence_score || 0.95) * 100).toFixed(0)}% Confidence</span>
+                        </div>
+                        {ocr.monetary_amounts?.length > 0 && (
+                          <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
+                            <span style={{ color: 'var(--text-muted)' }}>Amounts:</span>
+                            {ocr.monetary_amounts.map((m, i) => (
+                              <span key={i} style={{ padding: '1px 6px', backgroundColor: '#dcfce7', color: '#15803d', borderRadius: '4px', fontWeight: 700 }}>{m}</span>
+                            ))}
+                          </div>
+                        )}
+                        {ocr.skus_and_serials?.length > 0 && (
+                          <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
+                            <span style={{ color: 'var(--text-muted)' }}>SKUs:</span>
+                            {ocr.skus_and_serials.map((s, i) => (
+                              <span key={i} style={{ padding: '1px 6px', backgroundColor: '#f3e8ff', color: '#7e22ce', borderRadius: '4px', fontWeight: 600 }}>{s}</span>
+                            ))}
+                          </div>
+                        )}
+                        {ocr.full_text && (
+                          <div style={{ maxHeight: '80px', overflowY: 'auto', backgroundColor: '#0f172a', color: '#e2e8f0', padding: '6px 8px', borderRadius: '4px', fontFamily: 'var(--font-mono)', fontSize: '0.72rem', whiteSpace: 'pre-wrap', marginTop: '4px' }}>
+                            {ocr.full_text}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()
+                ) : (
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    No OCR transcription generated yet for this exhibit. Click "Run Forensic OCR" to transcribe.
+                  </div>
+                )}
+              </div>
             </div>
 
             <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
               <button 
-                onClick={() => setSelectedItem(null)}
+                onClick={() => { setSelectedItem(null); setOcrData(null); }}
                 className="btn btn-secondary"
               >
                 Close Inspector

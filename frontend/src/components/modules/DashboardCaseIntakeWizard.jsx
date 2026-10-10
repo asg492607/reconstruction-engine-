@@ -72,6 +72,31 @@ export default function DashboardCaseIntakeWizard({ onCaseCreated, onCancel }) {
     setSpecificOffense(OFFENSE_TYPES[cat][0].value);
   };
 
+  const applyTemplate = (tplKey) => {
+    if (tplKey === 'LUXURY_HEIST') {
+      setTitle('Theft at Metro Luxury Boutique - Vault & Counter 02');
+      setOffenseCategory('THEFT');
+      setSpecificOffense('BURGLARY_THEFT');
+      setLocation('Metro Boutique, 442 Avenue, Showroom Floor');
+      setObjectives('Establish temporal entry window, correlate safe access log, trace unverified inventory delta');
+      setNarrative('Night-time forced breach detected between 02:35 and 02:50 AM. Display case glass breached. Rolex Datejust and diamond pendants missing.');
+    } else if (tplKey === 'CARGO_LOSS') {
+      setTitle('High-Value Cargo Shortage - Logistics Bay 04');
+      setOffenseCategory('THEFT');
+      setSpecificOffense('CARGO_THEFT');
+      setLocation('Freight Terminal Warehouse, Bay 4');
+      setObjectives('Reconcile bill of lading against unsealed pallet, verify driver timestamp logs');
+      setNarrative('Discrepancy of 12 luxury camera handsets noted upon pallet unsealing. Seal tamper flag reported.');
+    } else if (tplKey === 'REGISTER_VOID') {
+      setTitle('Point-of-Sale Void Fraud - Cashier Terminal 03');
+      setOffenseCategory('THEFT');
+      setSpecificOffense('EMPLOYEE_THEFT');
+      setLocation('Retail Department Store, Terminal 03');
+      setObjectives('Audit cashier badge overrides, cross-verify receipt timestamp against camera');
+      setNarrative('Cashier logged manual override on high-ticket diamond ring. No payment transaction settled in register tape.');
+    }
+  };
+
   const handleAddExhibit = (e) => {
     e?.preventDefault();
     if (!exhibitTitle.trim()) {
@@ -113,6 +138,12 @@ export default function DashboardCaseIntakeWizard({ onCaseCreated, onCancel }) {
       } else if (exhibitType === 'INVENTORY_RECORD') {
         dept = 'FINANCIAL';
         modality = 'STRUCTURED_FINANCIAL_LEDGER';
+      } else if (exhibitType === 'TRANSACTION_RECORD') {
+        dept = 'FINANCIAL';
+        modality = 'STRUCTURED_FINANCIAL_LEDGER';
+      } else if (exhibitType === 'DOCUMENT') {
+        dept = 'FORENSIC';
+        modality = 'DOCUMENT';
       } else if (exhibitType === 'WITNESS_STATEMENT') {
         dept = 'INVESTIGATION';
         modality = 'HUMAN_TESTIMONIAL';
@@ -259,9 +290,50 @@ export default function DashboardCaseIntakeWizard({ onCaseCreated, onCancel }) {
             <div style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: 'var(--primary)', color: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.85rem' }}>
               1
             </div>
-            <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-main)' }}>
+            <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-main)', margin: 0 }}>
               Incident Profile & Legal Offense Classification
             </h3>
+          </div>
+
+          {/* Quick Scenario Templates */}
+          <div style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: '8px',
+            marginBottom: '18px',
+            padding: '10px 14px',
+            backgroundColor: '#f8fafc',
+            borderRadius: 'var(--radius-md)',
+            border: '1px dashed var(--border-light)'
+          }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+              ⚡ Quick Scenario Templates:
+            </span>
+            <button
+              type="button"
+              onClick={() => applyTemplate('LUXURY_HEIST')}
+              className="btn btn-secondary btn-sm"
+              style={{ fontSize: '0.75rem', padding: '3px 8px' }}
+            >
+              💎 Luxury Boutique Burglary
+            </button>
+            <button
+              type="button"
+              onClick={() => applyTemplate('CARGO_LOSS')}
+              className="btn btn-secondary btn-sm"
+              style={{ fontSize: '0.75rem', padding: '3px 8px' }}
+            >
+              📦 Freight Warehouse Cargo Loss
+            </button>
+            <button
+              type="button"
+              onClick={() => applyTemplate('REGISTER_VOID')}
+              className="btn btn-secondary btn-sm"
+              style={{ fontSize: '0.75rem', padding: '3px 8px' }}
+            >
+              🧾 Point-of-Sale Register Override
+            </button>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '18px' }}>
@@ -418,11 +490,29 @@ export default function DashboardCaseIntakeWizard({ onCaseCreated, onCancel }) {
 
               <button
                 type="button"
+                onClick={() => setExhibitType('DOCUMENT')}
+                className={`btn btn-sm ${exhibitType === 'DOCUMENT' ? 'btn-primary' : 'btn-secondary'}`}
+              >
+                <FileText size={15} />
+                Receipt, Blotter & OCR (.pdf, .jpg, .txt)
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setExhibitType('TRANSACTION_RECORD')}
+                className={`btn btn-sm ${exhibitType === 'TRANSACTION_RECORD' ? 'btn-primary' : 'btn-secondary'}`}
+              >
+                <FileSpreadsheet size={15} />
+                POS Register Log (.csv, .json)
+              </button>
+
+              <button
+                type="button"
                 onClick={() => setExhibitType('INVENTORY_RECORD')}
                 className={`btn btn-sm ${exhibitType === 'INVENTORY_RECORD' ? 'btn-primary' : 'btn-secondary'}`}
               >
                 <FileSpreadsheet size={15} />
-                Inventory / POS Ledger (.csv)
+                Inventory Reconciliation (.csv)
               </button>
 
               <button
@@ -446,6 +536,8 @@ export default function DashboardCaseIntakeWizard({ onCaseCreated, onCancel }) {
                   placeholder={
                     exhibitType === 'CCTV' ? "e.g. Camera 02 - Aisle View" :
                     exhibitType === 'IMAGE' ? "e.g. Door Latch Damage Close-up" :
+                    exhibitType === 'DOCUMENT' ? "e.g. Register Z-Tape Cashier Receipt" :
+                    exhibitType === 'TRANSACTION_RECORD' ? "e.g. Point-of-Sale Terminal 03 Audit CSV" :
                     exhibitType === 'INVENTORY_RECORD' ? "e.g. Daily Shrinkage Reconciliation CSV" :
                     "e.g. Eyewitness Statement - Store Clerk"
                   }
@@ -499,7 +591,8 @@ export default function DashboardCaseIntakeWizard({ onCaseCreated, onCancel }) {
                     exhibitType === 'CCTV' ? "video/*,.mp4,.mov,.avi,.mkv" :
                     exhibitType === 'IMAGE' ? "image/*,.jpg,.jpeg,.png,.tiff" :
                     exhibitType === 'INVENTORY_RECORD' ? ".csv,.json,.xlsx,.tsv" :
-                    ".txt,.pdf,.doc,.docx"
+                    exhibitType === 'TRANSACTION_RECORD' ? ".csv,.json,.txt" :
+                    ".pdf,.png,.jpg,.jpeg,.txt,.doc,.docx"
                   }
                 />
               </div>

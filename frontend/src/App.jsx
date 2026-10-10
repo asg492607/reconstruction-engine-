@@ -20,6 +20,8 @@ import CopilotChat from './components/modules/CopilotChat';
 import DossierViewer from './components/modules/DossierViewer';
 import AnalysisPlanViewer from './components/modules/AnalysisPlanViewer';
 import UnifiedReconstructionOutput from './components/modules/UnifiedReconstructionOutput';
+import ForensicOCRTerminal from './components/modules/ForensicOCRTerminal';
+import DetectiveBoard from './components/modules/DetectiveBoard';
 import NewCaseModal from './components/modals/NewCaseModal';
 
 export default function App() {
@@ -192,6 +194,17 @@ export default function App() {
           />
         )}
 
+        {activeTab === 'board' && (
+          <DetectiveBoard
+            caseData={activeCase}
+            evidence={evidence}
+            timelineEvents={timelineEvents}
+            entities={entities}
+            hypotheses={hypotheses}
+            onNavigate={setActiveTab}
+          />
+        )}
+
         {activeTab === 'overview' && (
           <>
             {user.role === 'FORENSIC_OFFICER' || user.role === 'FORENSIC_SPECIALIST' ? (
@@ -241,6 +254,14 @@ export default function App() {
             caseId={activeCase?.id}
             evidence={evidence}
             onRefresh={() => loadCaseDetails(activeCase?.id)}
+          />
+        )}
+
+        {activeTab === 'ocr' && (
+          <ForensicOCRTerminal
+            activeCase={activeCase}
+            evidence={evidence}
+            onEvidenceUpdated={() => loadCaseDetails(activeCase?.id)}
           />
         )}
 

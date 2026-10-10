@@ -57,19 +57,29 @@ async def answer_copilot_query(
         f"Case Number: {case.case_number}",
         f"Case Title: {case.title}",
         f"Incident Location: {case.incident_location or 'Showroom'}",
-        "\n--- EVIDENCE INGESTED ---"
+        "\n--- EVIDENCE INGESTED & OCR INTELLIGENCE ---"
     ]
     for ev in evidence_items:
-        context_lines.append(f"- [{ev.id[:8]}] {ev.original_filename} (Type: {ev.evidence_type.value}, SHA256: {ev.sha256_hash[:12]}...)")
+        meta = ev.metadata_json or {}
+        ocr_info = meta.get("ocr_data")
+        ocr_extra = ""
+        if ocr_info:
+            ocr_extra = f" | OCR [{ocr_info.get('document_type', 'DOC')}]: Merchant='{ocr_info.get('merchant_or_issuer')}', Total='{ocr_info.get('total_amount')}', Flags={ocr_info.get('forensic_flags', [])}"
+        context_lines.append(f"- [{ev.id[:8]}] {ev.original_filename} (Type: {ev.evidence_type.value}, SHA256: {ev.sha256_hash[:12]}...){ocr_extra}")
 
     context_lines.append("\n--- CHRONOLOGICAL TIMELINE EVENTS ---")
     for ev in timeline_events:
         time_str = ev.event_time.isoformat() if ev.event_time else "unknown"
         context_lines.append(f"- [{time_str}] {ev.description} (Sources: {ev.supporting_evidence_ids})")
 
-    context_lines.append("\n--- EXTRACTED OBSERVATIONS ---")
-    for o in observations[:10]:
-        context_lines.append(f"- [{o.evidence_id[:8]}] {o.observation_type.value} at {o.location_label or 'scene'} (Time: {o.observed_time_raw or 'approx'}) - Details: {o.raw_data}")
+    context_lines.append("\n--- EXTRACTED OBSERVATIONS & OCR TRANSCRIPTIONS ---")
+    for o in observations[:25]:
+        details = o.raw_data or {}
+        if o.observation_type.value == "TEXT_EXTRACTED":
+            details_str = f"OCR Doc='{details.get('document_type')}', Total={details.get('total_amount')}, Flags={details.get('forensic_flags')}, Excerpt='{str(details.get('transcript_excerpt', ''))[:180]}'"
+        else:
+            details_str = str(details)[:200]
+        context_lines.append(f"- [{o.evidence_id[:8] if o.evidence_id else 'CASE'}] {o.observation_type.value} at {o.location_label or 'scene'} (Time: {o.observed_time_raw or 'approx'}) - Details: {details_str}")
 
     if gaps:
         context_lines.append("\n--- DETECTED GAPS & CONFLICTS ---")
@@ -80,7 +90,6 @@ async def answer_copilot_query(
         context_lines.append("\n--- RECONSTRUCTED HYPOTHESES ---")
         for h in hypotheses:
             context_lines.append(f"- Hypothesis {h.label} ({h.overall_strength.value}): {h.description}")
-
 
     full_context = "\n".join(context_lines)
 

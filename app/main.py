@@ -21,6 +21,15 @@ async def lifespan(app: FastAPI):
     # Initialize DB schema on startup
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    
+    # Auto-seed default police officers & initial cases on startup
+    try:
+        from scripts.seed_demo_users import seed_users
+        await seed_users()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Auto-seed during lifespan notice: {e}")
+
     yield
     await engine.dispose()
 
@@ -46,11 +55,14 @@ import os
 from app.department_engines.router import router as engines_router
 from app.knowledge.router import router as knowledge_router
 
+from app.ocr.router import router as ocr_router
+
 app.include_router(auth_router)
 app.include_router(cases_router)
 app.include_router(engines_router)
 app.include_router(knowledge_router)
 app.include_router(evidence_router)
+app.include_router(ocr_router)
 app.include_router(observations_router)
 app.include_router(entities_router)
 app.include_router(timelines_router)
@@ -81,7 +93,24 @@ async def serve_dashboard():
     legacy_index = os.path.join(static_dir, "index.html")
     if os.path.exists(legacy_index):
         return FileResponse(legacy_index)
-    return {"message": "RRE 2.0 API is running. UI dist/index.html not found."}
+    return {
+        "status": "online",
+        "service": "Reality Reconstruction Engine (RRE 2.0) Backend API",
+        "version": "2.0.0",
+        "docs": "/docs",
+        "health": "/health",
+        "endpoints": {
+            "auth": "/auth",
+            "cases": "/cases",
+            "evidence": "/evidence",
+            "ocr": "/ocr",
+            "timelines": "/timelines",
+            "radar": "/gap-conflict",
+            "copilot": "/copilot",
+            "department_engines": "/department-engines",
+            "reports": "/reports"
+        }
+    }
 
 @app.get("/health", tags=["System"])
 async def health_check():

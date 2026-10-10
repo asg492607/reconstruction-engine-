@@ -7,7 +7,18 @@
 [![Python](https://img.shields.io/badge/Python-3.12+-3776AB.svg?style=flat&logo=python)](https://www.python.org/)
 [![Google Gemini](https://img.shields.io/badge/Google%20Gemini-3.6%20Flash-4285F4.svg?style=flat&logo=google)](https://ai.google.dev/)
 [![Firebase](https://img.shields.io/badge/Firebase-Auth-FFCA28.svg?style=flat&logo=firebase)](https://firebase.google.com/)
-[![Tests](https://img.shields.io/badge/Tests-17%20Passing-brightgreen.svg?style=flat)]()
+[![Tests](https://img.shields.io/badge/Tests-108%20Passing-brightgreen.svg?style=flat)]()
+[![Render](https://img.shields.io/badge/Render-Free%20Tier%20Ready-46E3B7.svg?style=flat&logo=render)](./RENDER_DEPLOYMENT.md)
+
+---
+
+## 🚀 Instant Free Tier Deployment on Render
+
+Deploy RRE 2.0 to Render with 1-click Blueprint support:
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
+
+👉 **Full Step-by-Step Instructions:** Read [RENDER_DEPLOYMENT.md](./RENDER_DEPLOYMENT.md) for pre-seeded police logins, environment variable details, and zero-downtime free tier setup.
 
 ---
 

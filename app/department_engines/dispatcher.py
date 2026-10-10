@@ -20,6 +20,10 @@ from app.department_engines.framework.base import (
 from app.department_engines.framework.governance import resource_governor
 from app.department_engines.framework.output_gate import output_gate, GateDecision
 from app.observations.service import create_observation
+from app.reconstruction.integrity_gate import (
+    validate_evidence_reference_integrity,
+    validate_provenance_citations
+)
 
 logger = logging.getLogger(__name__)
 
@@ -297,22 +301,19 @@ async def run_case_analysis(
             )
             record.analysis_version = active_version
             record.analysis_run_id = run_id
-            # Evidence Reference Integrity Gate enforcement
-            from app.reconstruction.integrity_gate import (
-                validate_evidence_reference_integrity,
-                validate_provenance_citations
-            )
-            is_valid, violations = validate_evidence_reference_integrity(
-                case_evidence_list=evidence_list,
-                payload=record.outputs,
-                context_desc=f"Engine {eid} ({eng.definition.engine_name})"
-            )
-            if not is_valid:
-                logger.warning(f"REJECTING output for {eid} due to UNSUPPORTED_EVIDENCE_REFERENCE: {violations}")
-                record.status = EngineExecutionResult.BLOCKED
-                record.actual_execution_mode = "BLOCKED"
-                record.failure_reason = f"UNSUPPORTED_EVIDENCE_REFERENCE: {'; '.join(violations)}"
-                record.outputs = []
+            # Evidence Reference Integrity Gate enforcement (applied to empirical findings, exempting R04 workflow structure)
+            if eid != "R04":
+                is_valid, violations = validate_evidence_reference_integrity(
+                    case_evidence_list=evidence_list,
+                    payload=record.outputs,
+                    context_desc=f"Engine {eid} ({eng.definition.engine_name})"
+                )
+                if not is_valid:
+                    logger.warning(f"REJECTING output for {eid} due to UNSUPPORTED_EVIDENCE_REFERENCE: {violations}")
+                    record.status = EngineExecutionResult.BLOCKED
+                    record.actual_execution_mode = "BLOCKED"
+                    record.failure_reason = f"UNSUPPORTED_EVIDENCE_REFERENCE: {'; '.join(violations)}"
+                    record.outputs = []
 
             # Also validate citation provenance for R01 / reconstruction outputs
             if record.outputs and eid in ["R01", "R02", "R03"]:

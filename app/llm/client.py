@@ -70,6 +70,8 @@ class AIClient:
         self,
         prompt: str,
         system_instruction: Optional[str] = None,
+        image_bytes: Optional[bytes] = None,
+        mime_type: Optional[str] = None,
         temperature: float = 0.2,
         response_json: bool = False,
         timeout: float = 30.0
@@ -79,8 +81,20 @@ class AIClient:
             return None
 
         model = settings.LLM_MODEL or "gemini-2.0-flash-lite"
+        parts = []
+        if image_bytes:
+            import base64
+            actual_mime = mime_type or "image/jpeg"
+            parts.append({
+                "inlineData": {
+                    "mimeType": actual_mime,
+                    "data": base64.b64encode(image_bytes).decode("utf-8")
+                }
+            })
+        parts.append({"text": prompt})
+
         payload: Dict[str, Any] = {
-            "contents": [{"parts": [{"text": prompt}]}],
+            "contents": [{"parts": parts}],
             "generationConfig": {
                 "temperature": temperature,
                 "maxOutputTokens": 4096

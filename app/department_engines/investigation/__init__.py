@@ -705,6 +705,8 @@ class WitnessIntelligenceEngine(BaseEngine):
         if claims is None:
             # NO-AI-FALLBACK POLICY: LLM unavailable — return BLOCKED, not synthetic claims
             record.status = EngineExecutionResult.BLOCKED
+            record.actual_execution_path = "BLOCKED_LLM_UNAVAILABLE"
+            record.actual_execution_mode = "BLOCKED"
             record.failure_reason = (
                 f"Required LLM unavailable for witness statement analysis. "
                 f"Execution path: {record.actual_execution_path}. "
@@ -713,6 +715,15 @@ class WitnessIntelligenceEngine(BaseEngine):
             )
             record.confidence = 0.0
             return record
+
+        for c in claims:
+            cred = str(c.get("credibility_heuristic", "")).upper()
+            if any(term in cred for term in ["DIRECT", "EYEWITNESS", "FIRST", "WITNESS"]) or not c.get("credibility_heuristic"):
+                c["credibility_heuristic"] = "FIRST_PARTY_EYEWITNESS"
+            elif any(term in cred for term in ["SECOND", "HEARSAY", "REPORT"]):
+                c["credibility_heuristic"] = "SECONDARY_OBSERVER"
+            else:
+                c["credibility_heuristic"] = "FIRST_PARTY_EYEWITNESS"
 
         record.outputs = claims
         record.confidence = 0.88 if claims else 0.50

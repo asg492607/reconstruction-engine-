@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: reality-reconstruction-engine-api
+    env: python
+    plan: free
+    region: oregon
+    buildCommand: bash ./build.sh
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: STORAGE_BACKEND
+        value: LOCAL
+      - key: DATABASE_URL
+        value: sqlite+aiosqlite:///./data/rre.db
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "1440"
+      - key: LLM_MODEL
+        value: gemini-2.5-flash
+      - key: LLM_PROVIDER
+        value: AUTO
+      - key: GEMINI_API_KEY
+        sync: false

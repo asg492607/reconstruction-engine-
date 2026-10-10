@@ -944,7 +944,20 @@ export default function UnifiedReconstructionOutput({
                   : `${(t.confidence * 100).toFixed(0)}%`;
 
                 let evidenceSources = 'N/A — engine not executed';
-                if (!isBlocked) {
+                if (isBlocked) {
+                  const blockDetail = t.failure_reason 
+                    || (t.actual_execution_path === 'BLOCKED_UNAVAILABLE_MODALITY' 
+                        ? 'Evidence modality absent from current case exhibit manifest' 
+                        : (t.actual_execution_path ? t.actual_execution_path.replace(/_/g, ' ') : 'Modality not present in case exhibits'));
+                  evidenceSources = (
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                      <span className="badge" style={{ fontSize: '0.65rem', marginRight: '6px', backgroundColor: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>
+                        MODALITY GATED
+                      </span>
+                      <span>{blockDetail}</span>
+                    </div>
+                  );
+                } else if (!isBlocked) {
                   if (t.engine_id === 'X02') {
                     const coverageStr = `Coverage: ${activeTimelineEvents.length > 0 ? `${activeTimelineEvents.length} source / 0 correlated` : '0 sources'}`;
                     evidenceSources = (

@@ -656,6 +656,30 @@ class AdversarialChallengeEngine(BaseEngine):
         conflicts = x05_res.outputs if x05_res else []
         hyps = r01_res.outputs if r01_res else []
 
+        # Deterministic challenge when R01 concluded insufficient evidence
+        is_insufficient = any(
+            h.get("scenario_type") == "INSUFFICIENT_EVIDENCE" or
+            (h.get("hypothesis_category") in ["INSUFFICIENT_EVIDENCE", "PARTIAL_CIRCUMSTANTIAL"] and not h.get("supporting_evidence_citations"))
+            for h in hyps
+        )
+        if is_insufficient:
+            record.status = EngineExecutionResult.SUCCESS
+            record.actual_execution_mode = "DETERMINISTIC"
+            record.actual_execution_path = "DETERMINISTIC_CHALLENGE"
+            record.fallback_used = "NOT_APPLICABLE"
+            record.confidence = 0.95
+            record.outputs = [
+                {
+                    "target_hypothesis_id": hyps[0].get("hypothesis_id", "HYP_INCOMPLETE_01") if hyps else "HYP_INCOMPLETE_01",
+                    "challenge_vector": "EVIDENTIARY_SUFFICIENCY_FAILURE",
+                    "adversarial_objection": "Available exhibits do not satisfy evidentiary thresholds for defensible attribution or sequence reconstruction.",
+                    "counter_evidence_strength": "HIGH",
+                    "rebuttal_grounding": "Total lack of direct visual, biometric, or sensory observations linking suspect to item transfer.",
+                    "evidentiary_vulnerability": "Threshold failure across all observational modalities."
+                }
+            ]
+            return record
+
         # LLM adversarial challenge required
         llm_challenges = await ai_client.challenge_hypotheses(hyps, gaps, conflicts)
         telem = ai_client.get_execution_telemetry()
@@ -673,6 +697,7 @@ class AdversarialChallengeEngine(BaseEngine):
 
         # NO-AI-FALLBACK POLICY: LLM unavailable — return BLOCKED
         record.status = EngineExecutionResult.BLOCKED
+        record.actual_execution_path = "BLOCKED_LLM_UNAVAILABLE"
         record.actual_execution_mode = "BLOCKED"
         record.failure_reason = (
             f"Required LLM unavailable for adversarial challenge generation. "
@@ -735,9 +760,9 @@ class HumanVerificationAuditEngine(BaseEngine):
                 "evidentiary_standing": standing,
                 "specialist_audit_summary": summary,
                 "review_tiers": [
-                    {"tier": "INVESTIGATION_SPECIALIST", "status": "HALTED" if is_insufficient else "PENDING_REVIEW", "scope": "CCTV tracks & timeline"},
+                    {"tier": "INVESTIGATION_SPECIALIST", "status": "HALTED" if is_insufficient else "PENDING_REVIEW", "scope": "Video surveillance tracking & timeline"},
                     {"tier": "FORENSIC_SPECIALIST", "status": "VERIFIED" if is_insufficient else "PENDING_REVIEW", "scope": "Damage & scene photos"},
-                    {"tier": "FINANCIAL_SPECIALIST", "status": "UNAVAILABLE" if is_insufficient else "PENDING_REVIEW", "scope": "Ledger reconciliation & POS match"},
+                    {"tier": "FINANCIAL_SPECIALIST", "status": "UNAVAILABLE" if is_insufficient else "PENDING_REVIEW", "scope": "Ledger reconciliation & transaction audit"},
                     {"tier": "LEAD_INVESTIGATOR", "status": "UNAVAILABLE" if is_insufficient else "PENDING_REVIEW", "scope": "Unavailable because no defensible reconstruction was generated." if is_insufficient else "Complete case synthesis"}
                 ],
                 "permitted_actions": ["ACCEPT", "CORRECT", "REJECT", "REANALYSIS_REQUESTED"],

@@ -13,7 +13,8 @@ import {
   Briefcase,
   ChevronDown,
   Database,
-  Plus
+  Plus,
+  Compass
 } from 'lucide-react';
 
 export default function Navbar({ 
@@ -30,14 +31,16 @@ export default function Navbar({
 
   const navItems = [
     { id: 'overview', label: 'Dashboard', icon: Layers },
+    { id: 'board', label: 'Case Canvas', icon: Compass },
     { id: 'plan', label: 'Analysis Plan', icon: Cpu },
     { id: 'evidence', label: 'Evidence Vault', icon: Database },
+    { id: 'ocr', label: 'Forensic OCR', icon: FileText },
     { id: 'timeline', label: 'Timeline', icon: Layers },
     { id: 'reconstruction', label: 'Reconstruction', icon: GitBranch },
     { id: 'gaps', label: 'Gaps & Conflicts', icon: AlertTriangle },
     { id: 'entities', label: 'Entities', icon: Users },
     { id: 'copilot', label: 'AI Copilot', icon: Cpu },
-    { id: 'output', label: 'Reconstruction Dossier', icon: FileText },
+    { id: 'output', label: 'Dossier & Sign-Off', icon: FileText },
   ];
 
   const getRoleBadgeClass = (role) => {

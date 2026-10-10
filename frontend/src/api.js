@@ -1,4 +1,4 @@
-const API_BASE = "";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
 export const getToken = () => localStorage.getItem("rre_jwt_token");
 export const setToken = (token) => localStorage.setItem("rre_jwt_token", token);
@@ -219,6 +219,24 @@ export const api = {
     get: async (caseId, itemId) => apiRequest(`/cases/${caseId}/knowledge/${itemId}`),
     delete: async (caseId, itemId) => apiRequest(`/cases/${caseId}/knowledge/${itemId}`, {
       method: "DELETE"
+    })
+  },
+
+  ocr: {
+    extractDirect: async (caseId, file) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      return apiRequest(`/cases/${caseId}/ocr/extract`, {
+        method: "POST",
+        body: formData
+      });
+    },
+    runEvidence: async (caseId, evidenceId) => apiRequest(`/cases/${caseId}/ocr/evidence/${evidenceId}`, {
+      method: "POST"
+    }),
+    commit: async (caseId, payload) => apiRequest(`/cases/${caseId}/ocr/commit`, {
+      method: "POST",
+      body: JSON.stringify(payload)
     })
   }
 };
