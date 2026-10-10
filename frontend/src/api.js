@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || "https://reconstruction-engine.onrender.com").replace(/\/$/, "");
 
 export const getToken = () => localStorage.getItem("rre_jwt_token");
 export const setToken = (token) => localStorage.setItem("rre_jwt_token", token);
@@ -33,11 +33,6 @@ async function apiRequest(endpoint, options = {}) {
     headers
   });
 
-  if (response.status === 401) {
-    removeToken();
-    window.dispatchEvent(new CustomEvent("rre_unauthorized"));
-  }
-
   if (!response.ok) {
     let errorDetail = `HTTP error ${response.status}`;
     try {
@@ -51,6 +46,16 @@ async function apiRequest(endpoint, options = {}) {
     } catch {
       // fallback
     }
+
+    if (
+      response.status === 401 ||
+      errorDetail.includes("Inactive or non-existent user") ||
+      errorDetail.includes("Could not validate credentials")
+    ) {
+      removeToken();
+      window.dispatchEvent(new CustomEvent("rre_unauthorized"));
+    }
+
     throw new Error(errorDetail || `HTTP error ${response.status}`);
   }
 
