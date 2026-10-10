@@ -7,6 +7,7 @@ export default defineConfig(({ mode }) => {
   const target = env.VITE_API_BASE_URL || 'https://reconstruction-engine.onrender.com'
 
   return {
+    base: './',
     plugins: [react()],
     server: {
       port: 5173,
