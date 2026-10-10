@@ -1,4 +1,5 @@
 # Reality Reconstruction Engine (RRE 2.0)
+
 ### Evidence Intelligence & Theft Reconstruction Platform
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-009688.svg?style=flat&logo=fastapi)](https://fastapi.tiangolo.com)
@@ -27,6 +28,7 @@ Deploy RRE 2.0 to Render with 1-click Blueprint support:
 The **Reality Reconstruction Engine (RRE 2.0)** transforms scattered theft evidence into traceable observations, routes evidence to authorized specialist departments, correlates their independent findings across time and entities, and generates evidence-constrained hypotheses for investigator review.
 
 Instead of treating AI output as factual conclusions, RRE enforces a rigorous, defendable architecture:
+
 - **Evidence Vault & Integrity**: Every original file is preserved immutably with SHA-256 cryptographic hashing upon intake, informed by digital-evidence collection and preservation principles.
 - **Strict Separation of Evidentiary Layers**: `Evidence → Observation → Finding → Claim → Correlated Event → Candidate Entity → Hypothesis → Verified Finding`.
 - **Assisted Analysis & Human Verification**: Forensic and financial engines provide assisted measurement and feature extraction; human specialists review and record findings.
@@ -99,17 +101,21 @@ Instead of treating AI output as factual conclusions, RRE enforces a rigorous, d
 ## 🚀 Key Features
 
 ### 1. Modern React Light-Theme Frontend
+
 - **Design Aesthetic**: Strict Blue & White light theme (`#2563eb` Royal Blue, `#ffffff` Crisp White, `#f8fafc` Ice Slate).
 - **Responsive Navigation**: Mobile hamburger drawer, sticky glass header, adaptive grid cards.
 - **Firebase Authentication**: Full email/password sign-in and registration with departmental role selection.
 
 ### 2. Specialized Department Dashboards
+
 - **Lead Investigator Command**: Case metrics, leading hypotheses summary, high-severity coverage gaps, and 1-click reconstruction triggers.
+
 - **Forensics Specialist Workstation**: Photographic toolmark inspection, assisted measurement, and evidence custody ledger.
 - **Financial Analyst Ledger**: Inventory discrepancy calculations ($4,200 deficit for 3 iPhone 16 Pro Max units) and authorized registry matching.
 - **External Legal Review & Export**: Controlled read-only access, evidence integrity ledger, and Evidence Reconstruction Report generation.
 
 ### 3. Investigation Modules
+
 - **Evidence Vault**: Secure upload, policy routing, SHA-256 hash calculator, provenance inspector.
 - **Correlated Timeline**: Synchronized chronological stream with department badges and source citations.
 - **Reconstruction Studio**: Competing hypotheses evaluated across categorical Evidence Support Levels with Layer 1/Layer 2 consistency validation.
@@ -131,6 +137,7 @@ Instead of treating AI output as factual conclusions, RRE enforces a rigorous, d
 ## ⚡ Quick Start
 
 ### 1. Clone & Install Dependencies
+
 ```bash
 git clone https://github.com/asg492607/reconstruction-engine-.git
 cd reconstruction-engine-
@@ -147,7 +154,9 @@ cd ..
 ```
 
 ### 2. Configure Environment Variables
+
 Copy `.env.example` to `.env`:
+
 ```env
 APP_NAME="Reality Reconstruction Engine"
 ENVIRONMENT="development"
@@ -158,6 +167,7 @@ SECRET_KEY="your-jwt-secret-key"
 ```
 
 ### 3. Run the Application
+
 ```bash
 # Terminal 1: FastAPI Backend
 .venv\Scripts\uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
@@ -175,6 +185,7 @@ npm run dev
 ## 🧪 Testing
 
 Run the full automated test suite:
+
 ```bash
 pytest -v
 ```
@@ -184,4 +195,5 @@ All 17 automated integration and unit test suites pass, verifying end-to-end fun
 ---
 
 ## 📄 License
+
 MIT License. Built for ethical, auditable, and transparent forensic intelligence.
