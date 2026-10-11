@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { api, getSavedUser, setSavedUser, removeToken } from './api';
-import Navbar from './components/Navbar';
+import Sidebar from './components/Sidebar';
+import TopHeader from './components/TopHeader';
 import LandingPage from './components/LandingPage';
 import AuthModal from './components/AuthModal';
+import ErrorBoundary from './components/ErrorBoundary';
 
 // Dashboards
 import LeadInvestigatorDashboard from './components/dashboards/LeadInvestigatorDashboard';
@@ -29,6 +31,8 @@ export default function App() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [newCaseModalOpen, setNewCaseModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   // Case Data
   const [cases, setCases] = useState([]);
@@ -171,8 +175,8 @@ export default function App() {
 
   // Render Authenticated Platform
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: 'var(--bg-app)', display: 'flex', flexDirection: 'column' }}>
-      <Navbar
+    <div className="app-shell">
+      <Sidebar
         user={user}
         onLogout={handleLogout}
         activeTab={activeTab}
@@ -181,9 +185,29 @@ export default function App() {
         activeCase={activeCase}
         onSelectCase={handleSelectCase}
         onNewCase={() => setNewCaseModalOpen(true)}
+        collapsed={sidebarCollapsed}
+        setCollapsed={setSidebarCollapsed}
+        mobileOpen={mobileSidebarOpen}
+        setMobileOpen={setMobileSidebarOpen}
+        evidenceCount={evidence.length}
+        eventsCount={timelineEvents.length}
+        hypothesesCount={hypotheses.length}
+        gapsCount={gapsConflicts.filter(g => g.severity === 'HIGH').length}
       />
 
-      <main className="container-xl" style={{ flex: 1, padding: '24px 16px' }}>
+      <div className="main-content-column">
+        <ErrorBoundary>
+          <TopHeader
+            onOpenMobileMenu={() => setMobileSidebarOpen(true)}
+            activeCase={activeCase}
+            activeTab={activeTab}
+            onTriggerReconstruction={handleTriggerReconstruction}
+            reconstructionLoading={reconstructionLoading}
+            onNavigate={setActiveTab}
+            onNewCase={() => setNewCaseModalOpen(true)}
+          />
+
+          <main className="container-xl animate-fade-in" style={{ flex: 1, padding: '24px 20px', width: '100%' }}>
         {activeTab === 'plan' && (
           <AnalysisPlanViewer
             activeCase={activeCase}
@@ -314,7 +338,9 @@ export default function App() {
             reconstructionLoading={reconstructionLoading}
           />
         )}
-      </main>
+          </main>
+        </ErrorBoundary>
+      </div>
 
       <AuthModal
         isOpen={authModalOpen}

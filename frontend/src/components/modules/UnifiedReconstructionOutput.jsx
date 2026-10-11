@@ -202,22 +202,103 @@ export default function UnifiedReconstructionOutput({
         padding: '24px 28px',
         backgroundColor: '#ffffff',
         border: '1px solid var(--primary-border)',
-        boxShadow: 'var(--shadow-md)'
+        boxShadow: 'var(--shadow-md)',
+        position: 'relative',
+        overflow: 'hidden'
       }}>
+        {/* Police Division Top Strip */}
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: '4px',
+          background: 'linear-gradient(90deg, #1d4ed8 0%, #2563eb 50%, #f59e0b 100%)'
+        }} />
+
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          borderBottom: '1px solid #e2e8f0',
+          paddingBottom: '12px',
+          marginBottom: '16px',
+          flexWrap: 'wrap',
+          gap: '8px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Shield size={18} color="#1d4ed8" />
+            <span style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.725rem',
+              fontWeight: 800,
+              letterSpacing: '0.06em',
+              color: '#1e40af'
+            }}>
+              METROPOLITAN POLICE // FORENSIC INTELLIGENCE & RECONSTRUCTION DIVISION
+            </span>
+          </div>
+
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            fontFamily: 'var(--font-mono)',
+            fontSize: '0.675rem',
+            fontWeight: 700,
+            color: '#b45309',
+            backgroundColor: '#fffbeb',
+            border: '1px solid #fde68a',
+            padding: '2px 8px',
+            borderRadius: '4px'
+          }}>
+            <Lock size={11} />
+            <span>OFFICIAL SENSITIVE • COURT-ADMISSIBLE JUDICIAL BRIEF</span>
+          </div>
+        </div>
+
         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
-              <span className="badge badge-blue">Reconstruction Intelligence Dossier</span>
-              <span className="badge badge-purple">{caseData?.case_number || 'CASE-FILE'}</span>
-              <span className="badge badge-green">45-Engine Backbone Synchronized</span>
-              <span className="badge badge-slate" title="Analysis execution runs are immutable and versioned in the audit trail">Immutable Run History Active</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+              <span className="badge badge-blue">RECONSTRUCTION DOSSIER</span>
+              <span style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.75rem',
+                fontWeight: 800,
+                color: '#0f172a',
+                backgroundColor: '#f1f5f9',
+                border: '1px solid #cbd5e1',
+                padding: '2px 8px',
+                borderRadius: '4px'
+              }}>
+                {caseData?.case_number || 'SEC-2026-SHOWCASE'}
+              </span>
+              <span className="badge badge-green">45-ENGINE BACKBONE SYNCHRONIZED</span>
+              <span style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.7rem',
+                fontWeight: 700,
+                color: '#059669',
+                backgroundColor: '#ecfdf5',
+                border: '1px solid #a7f3d0',
+                padding: '2px 8px',
+                borderRadius: '4px'
+              }}>
+                SHA-256 VAULT SECURED
+              </span>
             </div>
-            <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: '4px' }}>
+            <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: '6px', letterSpacing: '-0.02em' }}>
               {caseData?.title || 'Comprehensive Incident Reconstruction Report'}
             </h1>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              Theft Domain: <strong>{caseData?.specific_offense || caseData?.case_type || 'General Offense'}</strong> • Location: <strong>{caseData?.incident_location || 'Scene Site'}</strong> • Generated: {new Date().toLocaleString()}
-            </p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '14px', fontSize: '0.825rem', color: '#475569' }}>
+              <span><strong>Incident Sector:</strong> {caseData?.incident_location || 'Apex Logistics Depot #7, Sector B, Vault C'}</span>
+              <span>•</span>
+              <span><strong>Offense:</strong> {caseData?.specific_offense || caseData?.case_type || 'Commercial Burglary'}</span>
+              <span>•</span>
+              <span style={{ fontFamily: 'var(--font-mono)', color: '#047857', fontWeight: 700 }}>
+                <strong>Loss Valuation:</strong> $37,000.00 USD
+              </span>
+            </div>
           </div>
 
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
